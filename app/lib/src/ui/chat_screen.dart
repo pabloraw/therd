@@ -13,11 +13,33 @@ import 'pending_bar.dart';
 import 'sessions_screen.dart';
 import 'theme.dart';
 
-/// Ruta de un chat, con nombre para saber cuál está abierto.
-Route<void> chatRoute(String sessionId) => MaterialPageRoute<void>(
-  settings: RouteSettings(name: 'chat/$sessionId'),
-  builder: (_) => ChatScreen(sessionId: sessionId),
-);
+/// Ruta de un chat, con nombre para saber cuál está abierto. [instant] la
+/// abre sin transición (para sustituir un chat por su continuación).
+Route<void> chatRoute(String sessionId, {bool instant = false}) {
+  final settings = RouteSettings(name: 'chat/$sessionId');
+  if (instant) {
+    return PageRouteBuilder<void>(
+      settings: settings,
+      transitionDuration: Duration.zero,
+      reverseTransitionDuration: const Duration(milliseconds: 300),
+      pageBuilder: (_, _, _) => ChatScreen(sessionId: sessionId),
+    );
+  }
+  return MaterialPageRoute<void>(
+    settings: settings,
+    builder: (_) => ChatScreen(sessionId: sessionId),
+  );
+}
+
+/// Sesión que sigue a la que se ha ido en el mismo pane: tras un `/clear`
+/// Claude Code continúa en el mismo terminal con otro sessionId.
+SessionInfo? successorInPane(List<SessionInfo> sessions, String? paneId) {
+  if (paneId == null) return null;
+  for (final s in sessions) {
+    if (s.paneId == paneId) return s;
+  }
+  return null;
+}
 
 /// Sigue la pila de rutas para saber qué chat está arriba del todo.
 class ChatRouteTracker extends NavigatorObserver {
@@ -104,17 +126,59 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   /// El último prompt lo ha enviado este móvil: se fija aunque no esté abajo.
   bool _justSent = false;
 
+  /// Último pane conocido de la sesión, para seguirla si cambia de id.
+  String? _paneId;
+
+  /// La sesión desapareció sin sucesora: si no llega, se vuelve a la lista.
+  Timer? _goneTimer;
+
+  /// Ya se ha sustituido este chat por otro (o se ha cerrado).
+  bool _leaving = false;
+
   @override
   void initState() {
     super.initState();
     _ctl = ref.read(therdProvider.notifier);
     _scroll.addListener(_onScroll);
+    _paneId = ref.read(therdProvider).session(widget.sessionId)?.paneId;
     // No se toca el estado durante la construcción del árbol.
     Future.microtask(() => _ctl.openSession(widget.sessionId));
   }
 
+  /// La lista de sesiones cambió: si la de este chat ya no está, se sigue a
+  /// la que ocupa ahora su pane o, pasado un rato sin ninguna, se cierra.
+  void _onSessions(List<SessionInfo> sessions) {
+    if (_leaving || !mounted) return;
+    final mine = sessions.where((s) => s.sessionId == widget.sessionId);
+    if (mine.isNotEmpty) {
+      _paneId = mine.first.paneId ?? _paneId;
+      _goneTimer?.cancel();
+      _goneTimer = null;
+      return;
+    }
+    final next = successorInPane(sessions, _paneId);
+    if (next != null) {
+      _leaving = true;
+      _goneTimer?.cancel();
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        Navigator.of(
+          context,
+        ).pushReplacement(chatRoute(next.sessionId, instant: true));
+      });
+      return;
+    }
+    _goneTimer ??= Timer(const Duration(seconds: 6), () {
+      if (!mounted || _leaving) return;
+      if (ref.read(therdProvider).session(widget.sessionId) != null) return;
+      _leaving = true;
+      Navigator.of(context).maybePop();
+    });
+  }
+
   @override
   void dispose() {
+    _goneTimer?.cancel();
     _toastTimer?.cancel();
     _ctl.closeSession(widget.sessionId);
     _scroll.dispose();
@@ -256,6 +320,10 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       if (next != null && next.id != prev?.id) _showToast(next);
     });
     ref.listen(therdProvider.select((s) => s.chat(id).view), _onItems);
+    ref.listen(therdProvider.select((s) => s.sessions), (_, next) {
+      _onSessions(next);
+    });
+    if (session?.paneId != null) _paneId = session!.paneId;
 
     final status = session?.status ?? SessionStatus.unknown;
     final working = status == SessionStatus.working;

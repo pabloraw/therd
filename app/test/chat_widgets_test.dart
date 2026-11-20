@@ -681,4 +681,77 @@ void main() {
       expect(rows[1].isGroup, isFalse);
     });
   });
+
+  group('sesión que cambia de id', () {
+    Future<FakeClient> pumpInPane(WidgetTester tester) async {
+      final client = FakeClient();
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            clientProvider.overrideWithValue(client),
+            settingsStoreProvider.overrideWithValue(MemorySettingsStore(cfg)),
+          ],
+          child: MaterialApp(
+            theme: buildTheme(Brightness.light),
+            home: Builder(
+              builder: (context) => TextButton(
+                onPressed: () => Navigator.of(context).push(chatRoute('s1')),
+                child: const Text('abrir'),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.tap(find.text('abrir'));
+      await tester.pump(const Duration(milliseconds: 500));
+      // El controlador nace con el chat: el hello llega ya con él abierto.
+      client.emit(
+        const HelloMessage(
+          sessions: [
+            SessionInfo(sessionId: 's1', title: 'Antes', paneId: 'p1'),
+          ],
+        ),
+      );
+      await tester.pump();
+      await tester.pump();
+      return client;
+    }
+
+    testWidgets('tras /clear sigue a la sesión nueva del mismo pane', (
+      tester,
+    ) async {
+      final client = await pumpInPane(tester);
+      expect(find.text('Antes'), findsOneWidget);
+
+      // SessionEnd quita s1 y SessionStart trae s2 en el mismo pane.
+      client.emit(const SessionsMessage(sessions: []));
+      await tester.pump();
+      client.emit(
+        const SessionsMessage(
+          sessions: [
+            SessionInfo(sessionId: 's2', title: 'Después', paneId: 'p1'),
+          ],
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+
+      expect(find.text('Después'), findsOneWidget);
+      expect(find.text('Antes'), findsNothing);
+      expect(
+        client.sent.whereType<SubscribeMessage>().map((m) => m.sessionId),
+        contains('s2'),
+      );
+    });
+
+    testWidgets('sin sucesora vuelve a la lista', (tester) async {
+      final client = await pumpInPane(tester);
+      client.emit(const SessionsMessage(sessions: []));
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 7));
+      await tester.pump(const Duration(milliseconds: 500));
+      expect(find.text('abrir'), findsOneWidget);
+      expect(find.byType(ChatScreen), findsNothing);
+    });
+  });
 }
