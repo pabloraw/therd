@@ -1,0 +1,7 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <!-- Logo de therd: «th_» en GeistMono SemiBold -->
+    <path android:fillColor="#FFFFFFFF"
+        android:pathData="M38.69 61.27Q36.03 61.27 34.76 60.05Q33.49 58.83 33.49 56.32V47.72H28.51V44.75H33.49V40.88H37.14V44.75H43.42V47.72H37.14V56.04Q37.14 58.3 39.34 58.3H43.42V61.27ZM47.69 61.27V39.3H51.34V47.16Q51.99 45.71 53.24 45.04Q54.5 44.38 56.13 44.38Q58.7 44.38 60 46.1Q61.3 47.81 61.3 50.63V61.27H57.65V51.46Q57.65 49.36 56.94 48.43Q56.23 47.5 54.87 47.5Q53.32 47.5 52.33 48.55Q51.34 49.61 51.34 51.65V61.27ZM65.2 64.58V61.27H79.31V64.58Z"/>
+</vector>

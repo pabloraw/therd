@@ -1,0 +1,6 @@
+{
+  "name": "therd",
+  "version": "0.1.0",
+  "license": "MIT",
+  "description": "Hooks http de therd: espejo de Claude Code en la app y aprobaciones desde el móvil. Requiere el daemon de therd y la variable THERD_TOKEN."
+}

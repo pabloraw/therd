@@ -1,0 +1,25 @@
+# Unidad de usuario de systemd para el daemon de therd.
+#
+#   mkdir -p ~/.config/systemd/user
+#   cp deploy/systemd/therd.service ~/.config/systemd/user/
+#   systemctl --user daemon-reload
+#   systemctl --user enable --now therd
+#   journalctl --user -u therd -f        # log
+#
+# Para que siga en marcha sin sesión abierta: loginctl enable-linger "$USER".
+#
+# La IP de Tailscale se detecta al arrancar. Si el servicio arranca antes que
+# Tailscale, el WebSocket se queda en 127.0.0.1: fija "bindHost" en
+# ~/.config/therd/config.json para evitarlo.
+
+[Unit]
+Description=therd: vista de chat para Claude Code en herdr
+After=network-online.target
+
+[Service]
+ExecStart=%h/.local/bin/therd serve
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target

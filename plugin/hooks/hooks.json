@@ -1,0 +1,284 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "http",
+            "url": "http://127.0.0.1:24600/hook",
+            "timeout": 5,
+            "headers": {
+              "X-Herdr-Pane": "$HERDR_PANE_ID",
+              "Authorization": "Bearer $THERD_TOKEN",
+              "X-Therd-Managed": "1"
+            },
+            "allowedEnvVars": [
+              "HERDR_PANE_ID",
+              "THERD_TOKEN"
+            ]
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "http",
+            "url": "http://127.0.0.1:24600/hook",
+            "timeout": 5,
+            "headers": {
+              "X-Herdr-Pane": "$HERDR_PANE_ID",
+              "Authorization": "Bearer $THERD_TOKEN",
+              "X-Therd-Managed": "1"
+            },
+            "allowedEnvVars": [
+              "HERDR_PANE_ID",
+              "THERD_TOKEN"
+            ]
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "http",
+            "url": "http://127.0.0.1:24600/hook",
+            "timeout": 180,
+            "headers": {
+              "X-Herdr-Pane": "$HERDR_PANE_ID",
+              "Authorization": "Bearer $THERD_TOKEN",
+              "X-Therd-Managed": "1"
+            },
+            "allowedEnvVars": [
+              "HERDR_PANE_ID",
+              "THERD_TOKEN"
+            ]
+          }
+        ]
+      }
+    ],
+    "PermissionRequest": [
+      {
+        "hooks": [
+          {
+            "type": "http",
+            "url": "http://127.0.0.1:24600/hook",
+            "timeout": 180,
+            "headers": {
+              "X-Herdr-Pane": "$HERDR_PANE_ID",
+              "Authorization": "Bearer $THERD_TOKEN",
+              "X-Therd-Managed": "1"
+            },
+            "allowedEnvVars": [
+              "HERDR_PANE_ID",
+              "THERD_TOKEN"
+            ]
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "http",
+            "url": "http://127.0.0.1:24600/hook",
+            "timeout": 5,
+            "headers": {
+              "X-Herdr-Pane": "$HERDR_PANE_ID",
+              "Authorization": "Bearer $THERD_TOKEN",
+              "X-Therd-Managed": "1"
+            },
+            "allowedEnvVars": [
+              "HERDR_PANE_ID",
+              "THERD_TOKEN"
+            ]
+          }
+        ]
+      }
+    ],
+    "PostToolUseFailure": [
+      {
+        "hooks": [
+          {
+            "type": "http",
+            "url": "http://127.0.0.1:24600/hook",
+            "timeout": 5,
+            "headers": {
+              "X-Herdr-Pane": "$HERDR_PANE_ID",
+              "Authorization": "Bearer $THERD_TOKEN",
+              "X-Therd-Managed": "1"
+            },
+            "allowedEnvVars": [
+              "HERDR_PANE_ID",
+              "THERD_TOKEN"
+            ]
+          }
+        ]
+      }
+    ],
+    "Notification": [
+      {
+        "hooks": [
+          {
+            "type": "http",
+            "url": "http://127.0.0.1:24600/hook",
+            "timeout": 5,
+            "headers": {
+              "X-Herdr-Pane": "$HERDR_PANE_ID",
+              "Authorization": "Bearer $THERD_TOKEN",
+              "X-Therd-Managed": "1"
+            },
+            "allowedEnvVars": [
+              "HERDR_PANE_ID",
+              "THERD_TOKEN"
+            ]
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "http",
+            "url": "http://127.0.0.1:24600/hook",
+            "timeout": 5,
+            "headers": {
+              "X-Herdr-Pane": "$HERDR_PANE_ID",
+              "Authorization": "Bearer $THERD_TOKEN",
+              "X-Therd-Managed": "1"
+            },
+            "allowedEnvVars": [
+              "HERDR_PANE_ID",
+              "THERD_TOKEN"
+            ]
+          }
+        ]
+      }
+    ],
+    "StopFailure": [
+      {
+        "hooks": [
+          {
+            "type": "http",
+            "url": "http://127.0.0.1:24600/hook",
+            "timeout": 5,
+            "headers": {
+              "X-Herdr-Pane": "$HERDR_PANE_ID",
+              "Authorization": "Bearer $THERD_TOKEN",
+              "X-Therd-Managed": "1"
+            },
+            "allowedEnvVars": [
+              "HERDR_PANE_ID",
+              "THERD_TOKEN"
+            ]
+          }
+        ]
+      }
+    ],
+    "SubagentStart": [
+      {
+        "hooks": [
+          {
+            "type": "http",
+            "url": "http://127.0.0.1:24600/hook",
+            "timeout": 5,
+            "headers": {
+              "X-Herdr-Pane": "$HERDR_PANE_ID",
+              "Authorization": "Bearer $THERD_TOKEN",
+              "X-Therd-Managed": "1"
+            },
+            "allowedEnvVars": [
+              "HERDR_PANE_ID",
+              "THERD_TOKEN"
+            ]
+          }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "hooks": [
+          {
+            "type": "http",
+            "url": "http://127.0.0.1:24600/hook",
+            "timeout": 5,
+            "headers": {
+              "X-Herdr-Pane": "$HERDR_PANE_ID",
+              "Authorization": "Bearer $THERD_TOKEN",
+              "X-Therd-Managed": "1"
+            },
+            "allowedEnvVars": [
+              "HERDR_PANE_ID",
+              "THERD_TOKEN"
+            ]
+          }
+        ]
+      }
+    ],
+    "PreCompact": [
+      {
+        "hooks": [
+          {
+            "type": "http",
+            "url": "http://127.0.0.1:24600/hook",
+            "timeout": 5,
+            "headers": {
+              "X-Herdr-Pane": "$HERDR_PANE_ID",
+              "Authorization": "Bearer $THERD_TOKEN",
+              "X-Therd-Managed": "1"
+            },
+            "allowedEnvVars": [
+              "HERDR_PANE_ID",
+              "THERD_TOKEN"
+            ]
+          }
+        ]
+      }
+    ],
+    "PostCompact": [
+      {
+        "hooks": [
+          {
+            "type": "http",
+            "url": "http://127.0.0.1:24600/hook",
+            "timeout": 5,
+            "headers": {
+              "X-Herdr-Pane": "$HERDR_PANE_ID",
+              "Authorization": "Bearer $THERD_TOKEN",
+              "X-Therd-Managed": "1"
+            },
+            "allowedEnvVars": [
+              "HERDR_PANE_ID",
+              "THERD_TOKEN"
+            ]
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "http",
+            "url": "http://127.0.0.1:24600/hook",
+            "timeout": 5,
+            "headers": {
+              "X-Herdr-Pane": "$HERDR_PANE_ID",
+              "Authorization": "Bearer $THERD_TOKEN",
+              "X-Therd-Managed": "1"
+            },
+            "allowedEnvVars": [
+              "HERDR_PANE_ID",
+              "THERD_TOKEN"
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,49 @@
+● Write(hola.txt)
+  ⎿  Wrote 1 line to hola.txt
+      1 hola
+
+● He creado hola.txt con el texto "hola" usando la herramienta Write, en el directorio de trabajo.
+
+✻ Sautéed for 3s · done 17:14
+
+❯ Usa AskUserQuestion con una sola pregunta: color favorito, opciones rojo, verde, azul (una sola opción elegible).
+
+● Answered Claude's questions:
+  ⎿  · ¿Cuál es tu color favorito? → Verde
+
+● Has elegido verde como color favorito.
+
+✻ Sautéed for 3s · done 17:14
+
+❯ Usa AskUserQuestion con 3 preguntas: (1) color rojo/verde/azul, (2) animal perro/gato, (3) fruta manzana/pera/uva. Todas de una sola opción.
+
+● Answered Claude's questions:
+  ⎿  · ¿Qué color prefieres? → Rojo
+     · ¿Qué animal prefieres? → Gato
+     · ¿Qué fruta prefieres? → Uva
+
+● Tus respuestas:
+  - Color: rojo
+  - Animal: gato
+  - Fruta: uva
+
+✻ Crunched for 4s · done 17:14
+
+❯ Usa AskUserQuestion con una pregunta multiSelect: elige ingredientes de pizza (queso, jamon, piña), se pueden marcar varios.
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+←  ☐ Pizza  ✔ Submit  →
+
+¿Qué ingredientes quieres en tu pizza? (puedes elegir varios)
+
+❯ 1. [ ] Queso
+         Queso
+  2. [ ] Jamón
+         Jamón
+  3. [ ] Piña
+         Piña
+  4. [ ] Type something
+     Submit
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  5. Chat about this
+
+Enter to select · ↑/↓ to navigate · Esc to cancel
