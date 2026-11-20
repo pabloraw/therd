@@ -34,11 +34,20 @@ class ToolResultEvent extends TranscriptEvent {
 
 /// Metadatos de la sesión vistos en el transcript.
 class MetaEvent extends TranscriptEvent {
-  const MetaEvent({this.title, this.mode, this.model, this.branch});
+  const MetaEvent({
+    this.title,
+    this.mode,
+    this.model,
+    this.branch,
+    this.contextTokens,
+  });
   final String? title;
   final String? mode;
   final String? model;
   final String? branch;
+
+  /// Tokens de entrada de la última respuesta: lo que ocupa el contexto.
+  final int? contextTokens;
 }
 
 /// Máximo de caracteres del resultado de una herramienta que se conserva.
@@ -209,11 +218,7 @@ class TranscriptParser implements LineParser<TranscriptEvent> {
         text: full.join(' '),
       );
     }
-    if (RegExp(
-      r'^<(system-reminder|local-command-[a-z]+|task-notification|bash-[a-z]+)>',
-    ).hasMatch(text)) {
-      return null;
-    }
+    if (isSyntheticPrompt(text)) return null;
     return UserPromptItem(
       id: uuid,
       sessionId: sessionId,
@@ -233,6 +238,8 @@ class TranscriptParser implements LineParser<TranscriptEvent> {
     if (model is String && model.isNotEmpty && !model.startsWith('<')) {
       out.add(MetaEvent(model: model));
     }
+    final used = contextTokensOf(msg['usage']);
+    if (used != null) out.add(MetaEvent(contextTokens: used));
     final content = msg['content'];
     if (content is! List) return out;
 
@@ -370,6 +377,38 @@ class TranscriptParser implements LineParser<TranscriptEvent> {
     }
     return const [];
   }
+}
+
+final _syntheticPromptRe = RegExp(
+  r'^<(system-reminder|local-command-[a-z]+|task-notification|bash-[a-z]+'
+  r'|agent-message)(\s[^>]*)?>',
+);
+
+/// Texto que Claude Code mete como turno de usuario sin que lo haya escrito
+/// la persona: recordatorios, salida de comandos locales, avisos de tareas o
+/// el informe de un subagente (`<agent-message from="…">`). No se pinta como
+/// prompt, venga del transcript o del hook `UserPromptSubmit`.
+bool isSyntheticPrompt(String text) => _syntheticPromptRe.hasMatch(text);
+
+/// Tokens que ocupa el contexto según el `usage` de una respuesta: la entrada
+/// entera, con lo leído y escrito en caché. Null si no hay datos.
+int? contextTokensOf(Object? usage) {
+  if (usage is! Map) return null;
+  int n(String k) => (usage[k] as num?)?.toInt() ?? 0;
+  final total =
+      n('input_tokens') +
+      n('cache_creation_input_tokens') +
+      n('cache_read_input_tokens');
+  return total > 0 ? total : null;
+}
+
+/// Ventana de contexto de [model]. Haiku tiene 200k; el resto de modelos
+/// actuales, 1M. Si lo usado ya pasa de la estimada, la ventana es la de 1M.
+int contextWindowFor(String? model, int tokens) {
+  const small = 200000, large = 1000000;
+  final m = model?.toLowerCase() ?? '';
+  final guess = m.contains('haiku') ? small : large;
+  return tokens > guess ? large : guess;
 }
 
 /// Texto plano de un `content` de tool_result (cadena o lista de bloques).

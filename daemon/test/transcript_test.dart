@@ -114,6 +114,56 @@ void main() {
     });
   });
 
+  test('isSyntheticPrompt: etiquetas de Claude Code, con o sin atributos', () {
+    expect(isSyntheticPrompt('<task-notification>\nx'), isTrue);
+    expect(isSyntheticPrompt('<system-reminder>x</system-reminder>'), isTrue);
+    expect(isSyntheticPrompt('<agent-message from="ac8c">\nx'), isTrue);
+    expect(isSyntheticPrompt('<local-command-stdout>ok'), isTrue);
+    expect(isSyntheticPrompt('Mira <agent-message> esto'), isFalse);
+    expect(isSyntheticPrompt('<div>html que pego</div>'), isFalse);
+  });
+
+  group('uso de contexto', () {
+    test('suma la entrada con la caché y estima la ventana', () {
+      expect(
+        contextTokensOf({
+          'input_tokens': 2,
+          'cache_creation_input_tokens': 2874,
+          'cache_read_input_tokens': 75314,
+          'output_tokens': 679,
+        }),
+        78190,
+      );
+      expect(contextTokensOf({'input_tokens': 0}), isNull);
+      expect(contextTokensOf(null), isNull);
+      expect(contextWindowFor('claude-opus-5-5', 50000), 1000000);
+      expect(contextWindowFor('claude-haiku-5-5', 50000), 200000);
+      expect(contextWindowFor('claude-haiku-5-5', 300000), 1000000);
+      expect(contextWindowFor(null, 10), 1000000);
+    });
+
+    test('la última respuesta deja el contexto en la sesión', () {
+      final parser = TranscriptParser('s');
+      final store = SessionStore()..upsertSession('s');
+      for (final tokens in [1000, 250000]) {
+        for (final e in parser.parseLine(
+          '{"type":"assistant","uuid":"a$tokens","message":{'
+          '"model":"claude-opus-5-5","usage":{"input_tokens":$tokens},'
+          '"content":[{"type":"text","text":"hola"}]}}',
+        )) {
+          TranscriptHub.apply(store, 's', e);
+        }
+      }
+      final info = store.info('s')!;
+      expect(info.contextTokens, 250000);
+      expect(info.contextWindow, 1000000);
+      expect(info.contextUsed, 0.25);
+      final back = SessionInfo.fromJson(info.toJson());
+      expect(back.contextTokens, 250000);
+      expect(back.contextWindow, 1000000);
+    });
+  });
+
   group('TranscriptTailer', () {
     test('lee por offset, guarda líneas parciales y reanuda', () async {
       final dir = makeTemp('tail');

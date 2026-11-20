@@ -192,6 +192,7 @@ class TranscriptHub {
           mode: e.mode,
           model: e.model,
           branch: e.branch,
+          contextTokens: e.contextTokens,
         );
     }
   }

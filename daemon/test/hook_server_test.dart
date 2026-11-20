@@ -147,6 +147,25 @@ void main() {
       expect((await req.close()).statusCode, 400);
     });
 
+    test('el informe de un subagente no se pinta como prompt', () async {
+      final r = await post({
+        'hook_event_name': 'UserPromptSubmit',
+        'session_id': 's1',
+        'cwd': '/tmp/proyecto',
+        'prompt':
+            '<agent-message from="ac8c3d4cf58201751">\n'
+            '[Subagent hand-back] The text below is the final report…\n'
+            '</agent-message>',
+      });
+      expect(r.statusCode, 204);
+      await waitFor(
+        () => store.info('s1')?.status == SessionStatus.working,
+        what: 'estado',
+      );
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+      expect(store.itemsOf('s1'), isEmpty);
+    });
+
     test('eventos de espejo: 204 inmediato y crean sesión e items', () async {
       var r = await post({
         'hook_event_name': 'UserPromptSubmit',

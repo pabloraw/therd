@@ -235,7 +235,7 @@ class HookRouter implements HookHandler {
     // Las rutas de imágenes enviadas desde la app no se pintan: la imagen
     // llega luego con el transcript.
     final text = cleanPromptText(raw);
-    if (text.isEmpty) return;
+    if (text.isEmpty || isSyntheticPrompt(text)) return;
     final now = DateTime.now().toUtc();
     // Si el transcript ya trajo este prompt, no se duplica.
     for (final it in store.itemsOf(sid).reversed.take(8)) {

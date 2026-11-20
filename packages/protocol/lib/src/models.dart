@@ -27,6 +27,8 @@ class SessionInfo {
     this.tabId,
     this.tabLabel,
     this.tabNumber,
+    this.contextTokens,
+    this.contextWindow,
   });
 
   final String sessionId;
@@ -51,6 +53,19 @@ class SessionInfo {
   final String? tabLabel;
   final int? tabNumber;
 
+  /// Tokens que ocupa ahora el contexto (la entrada de la última respuesta).
+  final int? contextTokens;
+
+  /// Tamaño de la ventana de contexto del modelo, en tokens.
+  final int? contextWindow;
+
+  /// Fracción del contexto usada (0 a 1), o null si no se sabe.
+  double? get contextUsed {
+    final t = contextTokens, w = contextWindow;
+    if (t == null || w == null || w <= 0) return null;
+    return (t / w).clamp(0.0, 1.0);
+  }
+
   factory SessionInfo.fromJson(Map<String, dynamic> j) => SessionInfo(
     sessionId: j['sessionId'] as String? ?? '',
     paneId: j['paneId'] as String?,
@@ -66,6 +81,8 @@ class SessionInfo {
     tabId: j['tabId'] as String?,
     tabLabel: j['tabLabel'] as String?,
     tabNumber: (j['tabNumber'] as num?)?.toInt(),
+    contextTokens: (j['contextTokens'] as num?)?.toInt(),
+    contextWindow: (j['contextWindow'] as num?)?.toInt(),
   );
 
   Map<String, dynamic> toJson() => {
@@ -83,6 +100,8 @@ class SessionInfo {
     'tabId': tabId,
     'tabLabel': tabLabel,
     'tabNumber': tabNumber,
+    'contextTokens': contextTokens,
+    'contextWindow': contextWindow,
   };
 
   SessionInfo copyWith({
@@ -99,6 +118,8 @@ class SessionInfo {
     String? tabId,
     String? tabLabel,
     int? tabNumber,
+    int? contextTokens,
+    int? contextWindow,
   }) => SessionInfo(
     sessionId: sessionId,
     paneId: paneId ?? this.paneId,
@@ -114,6 +135,8 @@ class SessionInfo {
     tabId: tabId ?? this.tabId,
     tabLabel: tabLabel ?? this.tabLabel,
     tabNumber: tabNumber ?? this.tabNumber,
+    contextTokens: contextTokens ?? this.contextTokens,
+    contextWindow: contextWindow ?? this.contextWindow,
   );
 }
 

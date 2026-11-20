@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:path/path.dart' as p;
 import 'package:therd_protocol/protocol.dart';
 
+import 'transcript_parser.dart' show contextWindowFor;
+
 /// Cambios del store que el AppServer reenvía a las apps.
 sealed class StoreEvent {
   const StoreEvent();
@@ -333,11 +335,27 @@ class SessionStore {
     String? mode,
     String? model,
     String? branch,
+    int? contextTokens,
   }) {
     final s = _sessions[sessionId];
     if (s == null) return;
     if (title != null) s.aiTitle = title;
     upsertSession(sessionId, mode: mode, model: model, branch: branch);
+    if (contextTokens != null) {
+      final before = s.info;
+      s.info = before.copyWith(
+        contextTokens: contextTokens,
+        contextWindow: contextWindowFor(before.model, contextTokens),
+      );
+      // Solo se avisa cuando cambia el porcentaje entero: cada respuesta trae
+      // tokens nuevos y no merece una lista de sesiones entera.
+      int? pct(SessionInfo i) {
+        final u = i.contextUsed;
+        return u == null ? null : (u * 100).floor();
+      }
+
+      if (pct(before) != pct(s.info)) _events.add(const SessionsChanged());
+    }
   }
 
   void removeSession(String sessionId) {

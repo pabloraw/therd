@@ -682,6 +682,30 @@ void main() {
     });
   });
 
+  testWidgets('la cabecera lleva el rosco de contexto cuando se sabe', (
+    tester,
+  ) async {
+    final client = await pumpChat(tester);
+    expect(find.byType(ContextRing), findsNothing);
+    client.emit(
+      const SessionsMessage(
+        sessions: [
+          SessionInfo(
+            sessionId: 's1',
+            title: 'Prueba',
+            contextTokens: 423000,
+            contextWindow: 1000000,
+          ),
+        ],
+      ),
+    );
+    await tester.pump();
+    await tester.pump();
+    expect(find.byType(ContextRing), findsOneWidget);
+    expect(find.text('42'), findsOneWidget);
+    expect(find.bySemanticsLabel('Contexto usado: 42 %'), findsOneWidget);
+  });
+
   group('sesión que cambia de id', () {
     Future<FakeClient> pumpInPane(WidgetTester tester) async {
       final client = FakeClient();
