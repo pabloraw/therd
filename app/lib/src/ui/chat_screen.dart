@@ -8,6 +8,7 @@ import '../data/app_state.dart';
 import '../data/therd_controller.dart';
 import 'chat_items.dart';
 import 'composer.dart';
+import 'context_sheet.dart';
 import 'connection_chip.dart';
 import 'context_ring.dart';
 import 'pending_bar.dart';
@@ -382,6 +383,14 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
             status: viewStatus(status),
             branch: session?.branch,
             contextUsed: session?.contextUsed,
+            onContextTap: () => showContextSheet(
+              context,
+              sessionId: id,
+              onSend: (t) {
+                _justSent = true;
+                _ctl.sendPrompt(id, t);
+              },
+            ),
           ),
           ConnectionBanner(status: link),
           VersionBanner(
@@ -584,12 +593,14 @@ class _ChatHeader extends StatelessWidget {
     required this.status,
     required this.branch,
     this.contextUsed,
+    this.onContextTap,
   });
 
   final String title;
   final ViewStatus status;
   final String? branch;
   final double? contextUsed;
+  final VoidCallback? onContextTap;
 
   @override
   Widget build(BuildContext context) {
@@ -658,7 +669,17 @@ class _ChatHeader extends StatelessWidget {
                   ),
                   if (contextUsed != null) ...[
                     const SizedBox(width: 12),
-                    ContextRing(used: contextUsed!),
+                    Tooltip(
+                      message: 'Contexto: compactar o empezar de cero',
+                      child: InkResponse(
+                        onTap: onContextTap,
+                        radius: Tk.control / 2,
+                        child: SizedBox.square(
+                          dimension: Tk.control,
+                          child: Center(child: ContextRing(used: contextUsed!)),
+                        ),
+                      ),
+                    ),
                   ],
                 ],
               ),

@@ -8,6 +8,7 @@ import 'package:therd/src/ui/chat_items.dart';
 import 'package:therd/src/ui/chat_screen.dart';
 import 'package:therd/src/ui/composer.dart';
 import 'package:therd/src/ui/context_ring.dart';
+import 'package:therd/src/ui/context_sheet.dart';
 import 'package:therd/src/ui/pending_bar.dart';
 import 'package:therd/src/ui/theme.dart';
 import 'package:therd/src/ui/tool_card.dart';
@@ -705,6 +706,83 @@ void main() {
     expect(find.byType(ContextRing), findsOneWidget);
     expect(find.text('42'), findsOneWidget);
     expect(find.bySemanticsLabel('Contexto usado: 42 %'), findsOneWidget);
+  });
+
+  group('hoja del rosco de contexto', () {
+    SessionsMessage withContext(SessionStatus status) => SessionsMessage(
+      sessions: [
+        SessionInfo(
+          sessionId: 's1',
+          title: 'Prueba',
+          status: status,
+          contextTokens: 423000,
+          contextWindow: 1000000,
+        ),
+      ],
+    );
+
+    Future<FakeClient> openSheet(WidgetTester tester, SessionStatus st) async {
+      final client = await pumpChat(tester);
+      client.emit(withContext(st));
+      await tester.pump();
+      await tester.pump();
+      await tester.tap(find.byType(ContextRing));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      return client;
+    }
+
+    testWidgets('muestra el dato y Compactar manda /compact', (tester) async {
+      final client = await openSheet(tester, SessionStatus.idle);
+      expect(find.text('423.000 de 1.000.000 tokens'), findsOneWidget);
+      await tester.tap(find.text('Compactar'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(client.sentOf<PromptMessage>().map((m) => m.text), ['/compact']);
+      expect(find.text('423.000 de 1.000.000 tokens'), findsNothing);
+    });
+
+    testWidgets('Empezar de cero pide confirmación y manda /clear', (
+      tester,
+    ) async {
+      final client = await openSheet(tester, SessionStatus.idle);
+      await tester.tap(find.text('Empezar de cero'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(client.sentOf<PromptMessage>(), isEmpty);
+      await tester.tap(find.text('Cancelar'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(client.sentOf<PromptMessage>(), isEmpty);
+
+      await tester.tap(find.text('Empezar de cero'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      await tester.tap(find.text('Borrar'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(client.sentOf<PromptMessage>().map((m) => m.text), ['/clear']);
+    });
+
+    testWidgets('con la sesión trabajando las acciones no envían', (
+      tester,
+    ) async {
+      final client = await openSheet(tester, SessionStatus.working);
+      expect(find.textContaining('Claude está trabajando'), findsOneWidget);
+      await tester.tap(find.text('Compactar'));
+      await tester.pump();
+      await tester.tap(find.text('Empezar de cero'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(find.text('Borrar'), findsNothing);
+      expect(client.sentOf<PromptMessage>(), isEmpty);
+    });
+
+    test('formatTokens usa puntos de miles', () {
+      expect(formatTokens(999), '999');
+      expect(formatTokens(1000), '1.000');
+      expect(formatTokens(1234567), '1.234.567');
+    });
   });
 
   group('sesión que cambia de id', () {
