@@ -127,7 +127,20 @@ class AppState {
     this.pending = const {},
     this.notice,
     this.hellos = 0,
+    this.daemonProtocol,
   });
+
+  /// Versión de protocolo del daemon según su último hello; null mientras no
+  /// ha llegado ninguno.
+  final int? daemonProtocol;
+
+  /// El daemon habla un protocolo anterior al de la app.
+  bool get daemonOutdated =>
+      daemonProtocol != null && daemonProtocol! < protocolVersion;
+
+  /// El daemon habla un protocolo posterior al de la app.
+  bool get appOutdated =>
+      daemonProtocol != null && daemonProtocol! > protocolVersion;
 
   /// Cuántos `hello` se han recibido: permite saber si la lista de sesiones
   /// ya es fresca tras una reconexión.
@@ -177,6 +190,7 @@ class AppState {
     Map<String, List<Pending>>? pending,
     Notice? notice,
     int? hellos,
+    int? daemonProtocol,
   }) => AppState(
     configLoaded: configLoaded ?? this.configLoaded,
     config: clearConfig ? null : (config ?? this.config),
@@ -188,6 +202,7 @@ class AppState {
     pending: pending ?? this.pending,
     notice: notice ?? this.notice,
     hellos: hellos ?? this.hellos,
+    daemonProtocol: daemonProtocol ?? this.daemonProtocol,
   );
 }
 
@@ -312,6 +327,7 @@ AppState reduce(AppState s, ServerMessage m, {DateTime? now}) {
         seen: baselineSeen(s.seen, m.sessions),
         pending: const {},
         hellos: s.hellos + 1,
+        daemonProtocol: m.version,
       );
     case SessionsMessage():
       // Una sesión suscrita que desaparece pierde su chat y sus pendientes;

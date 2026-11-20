@@ -104,6 +104,7 @@ void main() {
     final c = await connect();
     final hello = await c.next<HelloMessage>();
     expect(hello.version, protocolVersion);
+    expect(hello.version, 2);
     expect(hello.sessions.single.sessionId, 's1');
     expect(hello.sessions.single.title, 'Tarea');
     expect(hello.sessions.single.lastSeq, 5);

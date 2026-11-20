@@ -314,6 +314,12 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
             branch: session?.branch,
           ),
           ConnectionBanner(status: link),
+          VersionBanner(
+            daemonOutdated: ref.watch(
+              therdProvider.select((s) => s.daemonOutdated),
+            ),
+            appOutdated: ref.watch(therdProvider.select((s) => s.appOutdated)),
+          ),
           Expanded(
             // El hueco entre la cabecera y el teclado, para medir la hoja.
             child: LayoutBuilder(

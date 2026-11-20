@@ -213,7 +213,11 @@ class AppServer {
     c.authed = true;
     _send(
       c,
-      HelloMessage(sessions: store.sessions, workspaces: store.workspaces),
+      HelloMessage(
+        version: protocolVersion,
+        sessions: store.sessions,
+        workspaces: store.workspaces,
+      ),
     );
   }
 

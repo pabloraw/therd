@@ -440,7 +440,7 @@ Message? _decode(Map<String, dynamic> j) {
   switch (j['type']) {
     case 'hello':
       return HelloMessage(
-        version: (j['version'] as num?)?.toInt() ?? 0,
+        version: (j['version'] as num?)?.toInt() ?? legacyProtocolVersion,
         sessions: asList(j['sessions'], SessionInfo.fromJson),
         workspaces: asList(j['workspaces'], WorkspaceInfo.fromJson),
       );

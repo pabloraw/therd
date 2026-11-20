@@ -1,5 +1,12 @@
-/// Versión del protocolo WebSocket. Se incrementa en cambios incompatibles.
-const int protocolVersion = 1;
+/// Versión del protocolo WebSocket. Se incrementa en cambios incompatibles
+/// o cuando se añaden mensajes que la otra parte debe conocer.
+///
+/// 1: primera versión (un daemon que no manda `version` cuenta como 1).
+/// 2: `open_session` y avisos de versión.
+const int protocolVersion = 2;
+
+/// Versión que se supone a un daemon que no la manda en el hello.
+const int legacyProtocolVersion = 1;
 
 /// Estado de una sesión (el mismo vocabulario que herdr).
 enum SessionStatus {
