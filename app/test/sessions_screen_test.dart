@@ -5,6 +5,7 @@ import 'package:therd/src/core/connection_config.dart';
 import 'package:therd/src/core/settings_store.dart';
 import 'package:therd/src/data/therd_client.dart';
 import 'package:therd/src/data/therd_controller.dart';
+import 'package:therd/src/ui/context_ring.dart';
 import 'package:therd/src/ui/sessions_screen.dart';
 import 'package:therd/src/ui/theme.dart';
 import 'package:therd_protocol/protocol.dart';
@@ -117,6 +118,27 @@ void main() {
     await tester.pump();
     expect(find.text('app'), findsNothing);
     expect(find.text('No hay sesiones sin leer.'), findsOneWidget);
+  });
+
+  testWidgets('rosco de contexto solo en las sesiones con dato', (
+    tester,
+  ) async {
+    await pumpList(
+      tester,
+      sessions: const [
+        SessionInfo(
+          sessionId: 'a',
+          title: 'Con dato',
+          contextTokens: 80000,
+          contextWindow: 100000,
+        ),
+        SessionInfo(sessionId: 'b', title: 'Sin dato'),
+      ],
+    );
+    expect(find.byType(ContextRing), findsOneWidget);
+    final ring = tester.widget<ContextRing>(find.byType(ContextRing));
+    expect(ring.used, closeTo(0.8, 1e-9));
+    expect(ring.showLabel, isFalse);
   });
 
   testWidgets('vacía y conectada', (tester) async {

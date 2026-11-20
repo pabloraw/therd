@@ -8,6 +8,7 @@ import '../data/therd_controller.dart';
 import 'chat_screen.dart';
 import 'connection_chip.dart';
 import 'connection_screen.dart';
+import 'context_ring.dart';
 import 'session_actions.dart';
 import 'theme.dart';
 
@@ -613,6 +614,10 @@ class SessionRow extends ConsumerWidget {
                     ],
                   ),
                 ),
+                if (session.contextUsed case final used?) ...[
+                  const SizedBox(width: 12),
+                  ContextRing(used: used, size: 18, showLabel: false),
+                ],
               ],
             ),
           ),
