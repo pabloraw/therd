@@ -79,5 +79,8 @@ abstract final class ErrorCode {
   static const unknownRequest = 'unknown_request';
   static const agentBlocked = 'agent_blocked';
   static const herdrUnavailable = 'herdr_unavailable';
+
+  /// Falló abrir o cerrar una sesión o un worktree.
+  static const actionFailed = 'action_failed';
   static const internal = 'internal';
 }

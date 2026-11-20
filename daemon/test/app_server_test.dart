@@ -470,4 +470,165 @@ void main() {
     c.ws.add('no json');
     expect((await c.next<ErrorMessage>()).code, ErrorCode.badRequest);
   });
+
+  group('abrir y cerrar', () {
+    setUp(() {
+      store.setWorkspaces(const [
+        WorkspaceInfo(workspaceId: 'w1', repoName: 'repo', branch: 'main'),
+        WorkspaceInfo(
+          workspaceId: 'w2',
+          branch: 'feat/a',
+          isLinkedWorktree: true,
+          parentWorkspaceId: 'w1',
+        ),
+      ]);
+      fake.handlers['agent.start'] = (_) => {
+        'result': {'type': 'agent_started'},
+      };
+      fake.handlers['agent.prompt'] = (_) => {
+        'result': {'type': 'ok'},
+      };
+    });
+
+    List<String> methods() => [
+      for (final r in fake.requests)
+        if (r['method'] != 'events.subscribe') r['method'] as String,
+    ];
+
+    test('nueva sesión: tab en el workspace, Claude y prompt', () async {
+      fake.handlers['tab.create'] = (_) => {
+        'result': {
+          'type': 'tab_created',
+          'root_pane': {'pane_id': 'w1:p9'},
+        },
+      };
+      final c = await connect();
+      await c.next<HelloMessage>();
+      c.send(
+        const OpenSessionMessage(opId: 'o1', workspaceId: 'w1', prompt: 'Hola'),
+      );
+      final ok = await c.next<SessionOpenedMessage>();
+      expect(ok.opId, 'o1');
+      expect(ok.paneId, 'w1:p9');
+      expect(ok.workspaceId, 'w1');
+      await waitFor(
+        () => methods().contains('agent.prompt'),
+        what: 'prompt inicial',
+      );
+      expect(methods(), ['tab.create', 'agent.start', 'agent.prompt']);
+      final req = {for (final r in fake.requests) r['method']: r['params']};
+      expect(req['tab.create'], {'workspace_id': 'w1', 'focus': false});
+      expect((req['agent.start'] as Map)['pane_id'], 'w1:p9');
+      expect(req['agent.prompt'], {'target': 'w1:p9', 'text': 'Hola'});
+    });
+
+    test('nueva sesión en worktree: worktree.create con rama y base', () async {
+      fake.handlers['worktree.create'] = (_) => {
+        'result': {
+          'type': 'worktree_created',
+          'workspace': {'workspace_id': 'w3'},
+          'root_pane': {'pane_id': 'w3:p1'},
+        },
+      };
+      final c = await connect();
+      await c.next<HelloMessage>();
+      c.send(
+        const OpenSessionMessage(
+          opId: 'o2',
+          workspaceId: 'w1',
+          branch: 'feat/b',
+          base: 'main',
+        ),
+      );
+      final ok = await c.next<SessionOpenedMessage>();
+      expect(ok.workspaceId, 'w3');
+      expect(ok.paneId, 'w3:p1');
+      final wt = fake.requests.firstWhere(
+        (r) => r['method'] == 'worktree.create',
+      );
+      expect(wt['params'], {
+        'workspace_id': 'w1',
+        'branch': 'feat/b',
+        'base': 'main',
+        'focus': false,
+      });
+      expect(methods(), isNot(contains('agent.prompt')));
+    });
+
+    test('si Claude no arranca se cierra la tab y llega el error', () async {
+      fake.handlers['tab.create'] = (_) => {
+        'result': {
+          'type': 'tab_created',
+          'root_pane': {'pane_id': 'w1:p9'},
+        },
+      };
+      fake.handlers['agent.start'] = (_) => {
+        'error': {'code': 'agent_start_failed', 'message': 'no arrancó'},
+      };
+      fake.handlers['pane.close'] = (_) => {
+        'result': {'type': 'ok'},
+      };
+      final c = await connect();
+      await c.next<HelloMessage>();
+      c.send(const OpenSessionMessage(opId: 'o3', workspaceId: 'w1'));
+      final e = await c.next<ErrorMessage>();
+      expect(e.code, ErrorCode.actionFailed);
+      expect(e.requestId, 'o3');
+      expect(e.message, contains('no arrancó'));
+      await waitFor(() => methods().contains('pane.close'), what: 'cierre');
+    });
+
+    test('workspace desconocido o rama con espacios: bad_request', () async {
+      final c = await connect();
+      await c.next<HelloMessage>();
+      c.send(const OpenSessionMessage(opId: 'o4', workspaceId: 'nope'));
+      var e = await c.next<ErrorMessage>();
+      expect(e.code, ErrorCode.badRequest);
+      expect(e.requestId, 'o4');
+      c.send(
+        const OpenSessionMessage(
+          opId: 'o5',
+          workspaceId: 'w1',
+          branch: 'mi rama',
+        ),
+      );
+      e = await c.next<ErrorMessage>();
+      expect(e.requestId, 'o5');
+      expect(methods(), isEmpty);
+    });
+
+    test('cerrar sesión cierra su pane', () async {
+      fake.handlers['pane.close'] = (_) => {
+        'result': {'type': 'ok'},
+      };
+      final c = await connect();
+      await c.next<HelloMessage>();
+      c.send(const CloseSessionMessage(sessionId: 's1'));
+      await waitFor(() => methods().contains('pane.close'), what: 'cierre');
+      expect(fake.requests.last['params'], {'pane_id': 'w1:p1'});
+    });
+
+    test('quitar worktree: solo enlazados y nunca forzado', () async {
+      fake.handlers['worktree.remove'] = (_) => {
+        'error': {
+          'code': 'git_failed',
+          'message': "'x' contains modified or untracked files, use --force",
+        },
+      };
+      final c = await connect();
+      await c.next<HelloMessage>();
+      c.send(const RemoveWorktreeMessage(workspaceId: 'w1'));
+      expect((await c.next<ErrorMessage>()).code, ErrorCode.badRequest);
+      expect(methods(), isEmpty);
+
+      c.send(const RemoveWorktreeMessage(workspaceId: 'w2'));
+      final e = await c.next<ErrorMessage>();
+      expect(e.code, ErrorCode.actionFailed);
+      expect(e.message, contains('sin commitear'));
+      expect(fake.requests.last['params'], {
+        'workspace_id': 'w2',
+        'force': false,
+      });
+    });
+  });
 }

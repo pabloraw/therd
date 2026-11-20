@@ -292,6 +292,12 @@ class AppServer {
         }
       case PushUnregisterMessage():
         push?.unregister(m.endpoint);
+      case OpenSessionMessage():
+        unawaited(_openSession(c, m));
+      case CloseSessionMessage():
+        unawaited(_closeSession(c, m));
+      case RemoveWorktreeMessage():
+        unawaited(_removeWorktree(c, m));
       case MarkSeenMessage():
         final sync = seen;
         if (sync != null) {
@@ -407,6 +413,141 @@ class AppServer {
     } on HerdrException catch (e) {
       _herdrError(c, e);
     }
+  }
+
+  // ------------------------------------------------ abrir y cerrar
+
+  WorkspaceInfo? _workspace(String id) {
+    for (final w in store.workspaces) {
+      if (w.workspaceId == id) return w;
+    }
+    return null;
+  }
+
+  /// Abre Claude en una tab nueva del workspace o, con rama, en un worktree
+  /// nuevo. Solo en workspaces que herdr ya lista: la app no elige rutas.
+  Future<void> _openSession(_Client c, OpenSessionMessage m) async {
+    final ws = _workspace(m.workspaceId);
+    if (ws == null) {
+      return _error(
+        c,
+        ErrorCode.badRequest,
+        'Ese workspace ya no está abierto en herdr.',
+        requestId: m.opId,
+      );
+    }
+    final branch = m.branch?.trim() ?? '';
+    final base = m.base?.trim() ?? '';
+    if (branch.contains(RegExp(r'\s'))) {
+      return _error(
+        c,
+        ErrorCode.badRequest,
+        'El nombre de la rama no puede llevar espacios.',
+        requestId: m.opId,
+      );
+    }
+    var workspaceId = ws.workspaceId;
+    String? pane;
+    try {
+      if (branch.isNotEmpty) {
+        final r = await herdr.worktreeCreate(
+          ws.workspaceId,
+          branch: branch,
+          base: base.isEmpty ? null : base,
+        );
+        workspaceId = r.workspaceId;
+        pane = r.paneId;
+      } else {
+        pane = await herdr.tabCreate(ws.workspaceId);
+      }
+      await herdr.startClaude(pane);
+    } on HerdrException catch (e) {
+      Log.warn('No se pudo abrir la sesión: ${e.message}');
+      // Una tab recién creada sin Claude no sirve: se cierra. El worktree se
+      // queda (puede tener ya la rama creada).
+      if (pane != null && branch.isEmpty) {
+        unawaited(herdr.paneClose(pane).catchError((Object _) {}));
+      }
+      return _actionError(c, 'No se pudo abrir la sesión', e, m.opId);
+    }
+    _send(
+      c,
+      SessionOpenedMessage(
+        opId: m.opId,
+        paneId: pane,
+        workspaceId: workspaceId,
+      ),
+    );
+    final prompt = m.prompt?.trim() ?? '';
+    if (prompt.isEmpty) return;
+    try {
+      await herdr.prompt(pane, prompt);
+    } on HerdrException catch (e) {
+      _herdrError(c, e);
+    }
+  }
+
+  Future<void> _closeSession(_Client c, CloseSessionMessage m) async {
+    final pane = store.info(m.sessionId)?.paneId;
+    if (pane == null) {
+      return _error(
+        c,
+        ErrorCode.unknownSession,
+        'La sesión ya no existe o no corre en herdr.',
+        requestId: m.sessionId,
+      );
+    }
+    try {
+      await herdr.paneClose(pane);
+    } on HerdrException catch (e) {
+      _actionError(c, 'No se pudo cerrar la sesión', e, m.sessionId);
+    }
+  }
+
+  Future<void> _removeWorktree(_Client c, RemoveWorktreeMessage m) async {
+    final ws = _workspace(m.workspaceId);
+    if (ws == null || !ws.isLinkedWorktree) {
+      return _error(
+        c,
+        ErrorCode.badRequest,
+        'Solo se pueden quitar worktrees abiertos en herdr.',
+        requestId: m.workspaceId,
+      );
+    }
+    try {
+      await herdr.worktreeRemove(ws.workspaceId);
+    } on HerdrException catch (e) {
+      final dirty = RegExp(
+        r'modified|untracked|uncommitted|dirty',
+        caseSensitive: false,
+      ).hasMatch(e.message);
+      if (dirty) {
+        return _error(
+          c,
+          ErrorCode.actionFailed,
+          'El worktree tiene cambios sin commitear; no se ha quitado.',
+          requestId: m.workspaceId,
+        );
+      }
+      _actionError(c, 'No se pudo quitar el worktree', e, m.workspaceId);
+    }
+  }
+
+  void _actionError(
+    _Client c,
+    String what,
+    HerdrException e,
+    String requestId,
+  ) {
+    // Con requestId siempre, para que la app sepa qué acción falló.
+    _error(
+      c,
+      ErrorCode.actionFailed,
+      e.isUnavailable
+          ? '$what: herdr no responde (${e.message}).'
+          : '$what: ${e.message}',
+      requestId: requestId,
+    );
   }
 
   void _herdrError(_Client c, HerdrException e) {

@@ -104,9 +104,11 @@ class HerdrClient implements TerminalIo, FocusIo {
   ).timeout(requestTimeout);
 
   /// Llama a un método y devuelve `result`. Lanza [HerdrException].
+  /// [timeout] sustituye a [requestTimeout] para métodos lentos.
   Future<Map<String, dynamic>> call(
     String method, [
     Map<String, dynamic> params = const {},
+    Duration? timeout,
   ]) async {
     final id = 'therd:${++_nextId}';
     Socket socket;
@@ -124,7 +126,7 @@ class HerdrClient implements TerminalIo, FocusIo {
           .transform(utf8.decoder)
           .transform(const LineSplitter())
           .first
-          .timeout(requestTimeout);
+          .timeout(timeout ?? requestTimeout);
       final resp = asMap(jsonDecode(line));
       if (resp['error'] is Map) {
         final e = asMap(resp['error']);
@@ -214,6 +216,72 @@ class HerdrClient implements TerminalIo, FocusIo {
   @override
   Future<void> focusPane(String paneId) async {
     await call('pane.focus', {'pane_id': paneId});
+  }
+
+  // ------------------------------------------------- abrir y cerrar
+
+  /// Tiempo máximo para que Claude arranque y quede listo.
+  static const agentStartTimeout = Duration(seconds: 60);
+
+  /// Tab nueva (sin enfocar) en [workspaceId]; devuelve su pane raíz.
+  Future<String> tabCreate(String workspaceId) async {
+    final r = await call('tab.create', {
+      'workspace_id': workspaceId,
+      'focus': false,
+    });
+    return _rootPane(r, 'tab.create');
+  }
+
+  /// Worktree nuevo del repo de [workspaceId] en la rama [branch] (creada
+  /// desde [base]), abierto como workspace propio. Devuelve su workspace y
+  /// su pane raíz.
+  Future<({String workspaceId, String paneId})> worktreeCreate(
+    String workspaceId, {
+    required String branch,
+    String? base,
+  }) async {
+    final r = await call('worktree.create', {
+      'workspace_id': workspaceId,
+      'branch': branch,
+      'base': ?base,
+      'focus': false,
+    }, const Duration(seconds: 60));
+    final ws = asMap(r['workspace'])['workspace_id'] as String?;
+    if (ws == null) {
+      throw HerdrException('bad_response', 'worktree.create sin workspace');
+    }
+    return (workspaceId: ws, paneId: _rootPane(r, 'worktree.create'));
+  }
+
+  String _rootPane(Map<String, dynamic> r, String method) {
+    final pane = asMap(r['root_pane'])['pane_id'] as String?;
+    if (pane == null) throw HerdrException('bad_response', '$method sin pane');
+    return pane;
+  }
+
+  /// Arranca Claude en [paneId] (que debe estar en el prompt de la shell) y
+  /// espera a que esté listo para recibir texto.
+  Future<void> startClaude(String paneId) async {
+    await call('agent.start', {
+      'name': 'claude',
+      'kind': 'claude',
+      'pane_id': paneId,
+      'timeout_ms': agentStartTimeout.inMilliseconds,
+    }, agentStartTimeout + const Duration(seconds: 5));
+  }
+
+  /// Cierra el pane (y lo que corre en él).
+  Future<void> paneClose(String paneId) async {
+    await call('pane.close', {'pane_id': paneId});
+  }
+
+  /// Quita el worktree de [workspaceId] sin forzar: git se niega si hay
+  /// cambios sin commitear.
+  Future<void> worktreeRemove(String workspaceId) async {
+    await call('worktree.remove', {
+      'workspace_id': workspaceId,
+      'force': false,
+    }, const Duration(seconds: 30));
   }
 
   // ------------------------------------------------------------ eventos

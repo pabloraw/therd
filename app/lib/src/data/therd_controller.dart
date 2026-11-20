@@ -42,6 +42,9 @@ class TherdController extends Notifier<AppState> {
       for (final s in subs) {
         s.cancel();
       }
+      for (final t in _openTimers.values) {
+        t.cancel();
+      }
     });
     Future.microtask(_bootstrap);
     return AppState(link: _client.current);
@@ -280,4 +283,55 @@ class TherdController extends Notifier<AppState> {
 
   void release(String requestId) =>
       _client.send(ReleaseMessage(requestId: requestId));
+
+  // ------------------------------------------------- abrir y cerrar
+
+  int _opSeq = 0;
+
+  /// Pide abrir Claude en [workspaceId] (o en un worktree nuevo si hay
+  /// [branch]). Devuelve el opId, que queda en `state.opening` hasta que la
+  /// sesión aparece ([finishOpening]), falla o pasa un rato sin noticias.
+  String requestSession(
+    String workspaceId, {
+    String? branch,
+    String? base,
+    String? prompt,
+  }) {
+    final opId = 'op:${DateTime.now().microsecondsSinceEpoch}:${++_opSeq}';
+    state = state.copyWith(opening: {...state.opening, opId: null});
+    _client.send(
+      OpenSessionMessage(
+        opId: opId,
+        workspaceId: workspaceId,
+        branch: _blankToNull(branch),
+        base: _blankToNull(base),
+        prompt: _blankToNull(prompt),
+      ),
+    );
+    // Arrancar Claude puede tardar (worktree, hooks); más allá se olvida.
+    _openTimers[opId] = Timer(openingTimeout, () => finishOpening(opId));
+    return opId;
+  }
+
+  /// Lo que se espera a que una sesión pedida aparezca en la lista.
+  static const openingTimeout = Duration(seconds: 90);
+
+  final Map<String, Timer> _openTimers = {};
+
+  void finishOpening(String opId) {
+    _openTimers.remove(opId)?.cancel();
+    if (!state.opening.containsKey(opId)) return;
+    state = state.copyWith(opening: {...state.opening}..remove(opId));
+  }
+
+  void closeRemoteSession(String sessionId) =>
+      _client.send(CloseSessionMessage(sessionId: sessionId));
+
+  void removeWorktree(String workspaceId) =>
+      _client.send(RemoveWorktreeMessage(workspaceId: workspaceId));
+}
+
+String? _blankToNull(String? s) {
+  final t = s?.trim() ?? '';
+  return t.isEmpty ? null : t;
 }

@@ -8,6 +8,7 @@ import '../data/therd_controller.dart';
 import 'chat_screen.dart';
 import 'connection_chip.dart';
 import 'connection_screen.dart';
+import 'session_actions.dart';
 import 'theme.dart';
 
 /// Último tramo de una ruta, para nombrar sesiones sin título.
@@ -80,10 +81,40 @@ class SessionsScreen extends ConsumerStatefulWidget {
 class _SessionsScreenState extends ConsumerState<SessionsScreen> {
   SessionFilter _filter = SessionFilter.all;
 
+  /// Sesión pedida desde el móvil que ya corre: en cuanto aparece en la lista
+  /// se abre su chat.
+  void _onOpening(AppState s) {
+    for (final e in s.opening.entries) {
+      final pane = e.value;
+      if (pane == null) continue;
+      final session = successorInPane(s.sessions, pane);
+      if (session == null) continue;
+      final ctl = ref.read(therdProvider.notifier);
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        ctl.finishOpening(e.key);
+        final nav = Navigator.of(context);
+        nav.popUntil((r) => r.isFirst);
+        nav.push(chatRoute(session.sessionId));
+      });
+      return;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(therdProvider);
     final link = state.link;
+    ref.listen(therdProvider, (_, next) => _onOpening(next));
+    // Los errores de abrir o cerrar llegan aquí; con un chat encima, los
+    // pinta él.
+    ref.listen(therdProvider.select((s) => s.notice), (prev, next) {
+      if (next == null || next.id == prev?.id) return;
+      if (!(ModalRoute.of(context)?.isCurrent ?? true)) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(next.message)));
+    });
 
     final views = {
       for (final s in state.sessions) s.sessionId: sessionView(state, s),
@@ -116,6 +147,7 @@ class _SessionsScreenState extends ConsumerState<SessionsScreen> {
           children: [
             _Header(link: link, summary: top),
             ConnectionBanner(status: link),
+            if (state.opening.isNotEmpty) const _OpeningBanner(),
             Expanded(
               child: empty
                   ? _Empty(connected: link.isConnected)
@@ -337,6 +369,37 @@ class _Seg extends StatelessWidget {
   }
 }
 
+/// Franja mientras herdr arranca una sesión pedida desde el móvil.
+class _OpeningBanner extends StatelessWidget {
+  const _OpeningBanner();
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.tc;
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 4, 16, 4),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(color: c.workSoft, borderRadius: Tk.br),
+      child: Row(
+        children: [
+          Spinner(size: 14, stroke: 2, color: c.workFg),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              'Abriendo sesión en el PC…',
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+                color: c.workFg,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _NoMatch extends StatelessWidget {
   const _NoMatch({required this.filter});
   final SessionFilter filter;
@@ -437,18 +500,17 @@ List<TabEntry> orderedTabs(List<SessionInfo> sessions) {
 }
 
 /// Cabecera de un workspace: solo el nombre, 13 px, `muted`. Sin rama ni punto.
-class SectionHeader extends StatelessWidget {
+/// Con pulsación larga, nueva sesión o worktree en ese repo.
+class SectionHeader extends ConsumerWidget {
   const SectionHeader({super.key, required this.node});
 
   final WorkspaceNode node;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final ws = node.workspace;
-    final label = ws == null
-        ? 'Fuera de herdr'
-        : (ws.label.isNotEmpty ? ws.label : (ws.repoName ?? ws.workspaceId));
-    return Padding(
+    final label = ws == null ? 'Fuera de herdr' : workspaceLabel(ws);
+    final text = Padding(
       padding: const EdgeInsets.fromLTRB(20, 16, 20, 4),
       child: Text(
         label,
@@ -461,12 +523,17 @@ class SectionHeader extends StatelessWidget {
         ),
       ),
     );
+    if (ws == null) return text;
+    return InkWell(
+      onLongPress: () => showRepoActions(context, ref, ws),
+      child: text,
+    );
   }
 }
 
 /// Una tab (sesión de Claude). Todas del mismo tamaño, estén en el checkout
 /// principal o en un worktree ([indent] > 0, con línea vertical de árbol).
-class SessionRow extends StatelessWidget {
+class SessionRow extends ConsumerWidget {
   const SessionRow({
     super.key,
     required this.session,
@@ -485,7 +552,7 @@ class SessionRow extends StatelessWidget {
   final String? fallbackBranch;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final c = context.tc;
     final view = sessionView(state, session);
     final title = paneSuffix == null
@@ -499,6 +566,7 @@ class SessionRow extends StatelessWidget {
       child: InkWell(
         borderRadius: Tk.br,
         onTap: () => _open(context, session),
+        onLongPress: () => showSessionActions(context, ref, session, title),
         child: ConstrainedBox(
           constraints: const BoxConstraints(minHeight: 54),
           child: Padding(

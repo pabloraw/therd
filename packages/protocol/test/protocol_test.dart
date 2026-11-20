@@ -177,6 +177,7 @@ final server = <ServerMessage>[
   ),
   const PongMessage(),
   const SeenMessage(sessionId: 's1', seq: 9),
+  const SessionOpenedMessage(opId: 'o1', paneId: 'p1', workspaceId: 'w1'),
 ];
 
 const client = <ClientMessage>[
@@ -199,6 +200,16 @@ const client = <ClientMessage>[
   MarkSeenMessage(sessionId: 's1', seq: 9),
   PushRegisterMessage(endpoint: 'http://h/up1?up=1', previous: 'http://h/up0'),
   PushUnregisterMessage(endpoint: 'http://h/up1?up=1'),
+  OpenSessionMessage(opId: 'o1', workspaceId: 'w1'),
+  OpenSessionMessage(
+    opId: 'o2',
+    workspaceId: 'w1',
+    branch: 'feat/x',
+    base: 'main',
+    prompt: 'Empieza',
+  ),
+  CloseSessionMessage(sessionId: 's'),
+  RemoveWorktreeMessage(workspaceId: 'w2'),
 ];
 
 void main() {
@@ -331,6 +342,10 @@ void main() {
         PingMessage() => 'ping',
         PushRegisterMessage() => 'push_register',
         PushUnregisterMessage() => 'push_unregister',
+        OpenSessionMessage() => 'open_session',
+        CloseSessionMessage() => 'close_session',
+        RemoveWorktreeMessage() => 'remove_worktree',
+        SessionOpenedMessage() => 'session_opened',
         UnknownMessage() => 'unknown',
       };
       for (final m in [...server, ...client]) {

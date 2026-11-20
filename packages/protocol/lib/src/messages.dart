@@ -407,6 +407,80 @@ final class PushUnregisterMessage extends ClientMessage {
   Map<String, dynamic> bodyJson() => {'endpoint': endpoint};
 }
 
+/// type "open_session": abre una sesión de Claude en el workspace
+/// [workspaceId] de herdr, en una tab nueva. Con [branch] crea antes un
+/// worktree de ese repo (desde [base], o la rama actual si es null) y la abre
+/// ahí. [prompt], si viene, se envía en cuanto Claude está listo. [opId] lo
+/// elige la app y vuelve en [SessionOpenedMessage] o en el `requestId` del
+/// error.
+final class OpenSessionMessage extends ClientMessage {
+  const OpenSessionMessage({
+    required this.opId,
+    required this.workspaceId,
+    this.branch,
+    this.base,
+    this.prompt,
+  });
+  final String opId;
+  final String workspaceId;
+  final String? branch;
+  final String? base;
+  final String? prompt;
+  @override
+  String get type => 'open_session';
+  @override
+  Map<String, dynamic> bodyJson() => {
+    'opId': opId,
+    'workspaceId': workspaceId,
+    'branch': branch,
+    'base': base,
+    'prompt': prompt,
+  };
+}
+
+/// type "close_session": cierra el pane de la sesión (y Claude con él).
+final class CloseSessionMessage extends ClientMessage {
+  const CloseSessionMessage({required this.sessionId});
+  final String sessionId;
+  @override
+  String get type => 'close_session';
+  @override
+  Map<String, dynamic> bodyJson() => {'sessionId': sessionId};
+}
+
+/// type "remove_worktree": quita el worktree del workspace [workspaceId]
+/// (cierra su workspace y borra el checkout). Nunca fuerza: si hay cambios
+/// sin commitear, herdr lo rechaza y llega un error.
+final class RemoveWorktreeMessage extends ClientMessage {
+  const RemoveWorktreeMessage({required this.workspaceId});
+  final String workspaceId;
+  @override
+  String get type => 'remove_worktree';
+  @override
+  Map<String, dynamic> bodyJson() => {'workspaceId': workspaceId};
+}
+
+/// type "session_opened": Claude ya corre en [paneId]; su sesión aparecerá en
+/// la lista con ese pane.
+final class SessionOpenedMessage extends ServerMessage {
+  const SessionOpenedMessage({
+    required this.opId,
+    required this.paneId,
+    required this.workspaceId,
+  });
+  final String opId;
+  final String paneId;
+  final String workspaceId;
+  @override
+  String get type => 'session_opened';
+  @override
+  Map<String, dynamic> bodyJson() => {
+    'opId': opId,
+    'paneId': paneId,
+    'workspaceId': workspaceId,
+  };
+}
+
 /// type "pong" (respuesta del servidor a ping).
 final class PongMessage extends ServerMessage {
   const PongMessage();
@@ -537,6 +611,24 @@ Message? _decode(Map<String, dynamic> j) {
       );
     case 'push_unregister':
       return PushUnregisterMessage(endpoint: j['endpoint'] as String);
+    case 'open_session':
+      return OpenSessionMessage(
+        opId: j['opId'] as String,
+        workspaceId: j['workspaceId'] as String,
+        branch: j['branch'] as String?,
+        base: j['base'] as String?,
+        prompt: j['prompt'] as String?,
+      );
+    case 'close_session':
+      return CloseSessionMessage(sessionId: j['sessionId'] as String);
+    case 'remove_worktree':
+      return RemoveWorktreeMessage(workspaceId: j['workspaceId'] as String);
+    case 'session_opened':
+      return SessionOpenedMessage(
+        opId: j['opId'] as String,
+        paneId: j['paneId'] as String,
+        workspaceId: j['workspaceId'] as String? ?? '',
+      );
   }
   return null;
 }

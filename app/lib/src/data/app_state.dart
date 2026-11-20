@@ -127,7 +127,12 @@ class AppState {
     this.pending = const {},
     this.notice,
     this.hellos = 0,
+    this.opening = const {},
   });
+
+  /// Sesiones pedidas desde el móvil que aún no se han abierto, por opId:
+  /// null mientras herdr arranca Claude, y luego el pane donde corre.
+  final Map<String, String?> opening;
 
   /// Cuántos `hello` se han recibido: permite saber si la lista de sesiones
   /// ya es fresca tras una reconexión.
@@ -177,7 +182,9 @@ class AppState {
     Map<String, List<Pending>>? pending,
     Notice? notice,
     int? hellos,
+    Map<String, String?>? opening,
   }) => AppState(
+    opening: opening ?? this.opening,
     configLoaded: configLoaded ?? this.configLoaded,
     config: clearConfig ? null : (config ?? this.config),
     link: link ?? this.link,
@@ -312,6 +319,8 @@ AppState reduce(AppState s, ServerMessage m, {DateTime? now}) {
         seen: baselineSeen(s.seen, m.sessions),
         pending: const {},
         hellos: s.hellos + 1,
+        // Una apertura en vuelo perdió su respuesta con la conexión.
+        opening: const {},
       );
     case SessionsMessage():
       // Una sesión suscrita que desaparece pierde su chat y sus pendientes;
@@ -377,6 +386,14 @@ AppState reduce(AppState s, ServerMessage m, {DateTime? now}) {
         if (kept.isNotEmpty) next[sid] = kept;
       });
       return s.copyWith(pending: next);
+    case SessionOpenedMessage():
+      if (!s.opening.containsKey(m.opId)) return s;
+      return s.copyWith(opening: {...s.opening, m.opId: m.paneId});
+    case ErrorMessage() when s.opening.containsKey(m.requestId):
+      return s.copyWith(
+        opening: {...s.opening}..remove(m.requestId),
+        notice: Notice((s.notice?.id ?? 0) + 1, m.code, m.message),
+      );
     case ErrorMessage():
       // unknown_session no trae backlog ni sessionId: se liberan las esperas.
       final released = m.code == ErrorCode.unknownSession
