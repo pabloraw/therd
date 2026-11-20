@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- «th_» del splash de Android 12+. El sistema pinta este icono a 288dp
+     (sin fondo de icono); el viewport se agranda para que el logo salga al
+     mismo tamaño que splash_logo (caja de 108 a 132dp) y centrado. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="288dp" android:height="288dp"
+    android:viewportWidth="235.636" android:viewportHeight="235.636">
+    <group android:translateX="63.818" android:translateY="63.818">
+        <path android:fillColor="#FFFFFFFF"
+            android:pathData="M28.75 65.9Q24.45 65.9 22.4 63.93Q20.35 61.95 20.35 57.9V44H12.3V39.2H20.35V32.95H26.25V39.2H36.4V44H26.25V57.45Q26.25 61.1 29.8 61.1H36.4V65.9ZM44.3 65.9V30.4H50.2V43.1Q51.25 40.75 53.27 39.68Q55.3 38.6 57.95 38.6Q62.1 38.6 64.2 41.38Q66.3 44.15 66.3 48.7V65.9H60.4V50.05Q60.4 46.65 59.25 45.15Q58.1 43.65 55.9 43.65Q53.4 43.65 51.8 45.35Q50.2 47.05 50.2 50.35V65.9ZM73.6 71.25V65.9H96.4V71.25Z" />
+    </group>
+</vector>

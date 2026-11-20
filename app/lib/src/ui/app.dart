@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -10,6 +9,7 @@ import '../data/therd_controller.dart';
 import 'chat_screen.dart';
 import 'connection_screen.dart';
 import 'sessions_screen.dart';
+import 'splash.dart';
 import 'theme.dart';
 
 class TherdApp extends ConsumerStatefulWidget {
@@ -103,105 +103,14 @@ class _TherdAppState extends ConsumerState<TherdApp> {
       theme: buildTheme(Brightness.light),
       darkTheme: buildTheme(Brightness.dark),
       themeMode: ThemeMode.system,
+      builder: (context, child) =>
+          SplashGate(ready: loaded, child: child ?? const SizedBox()),
+      // Mientras carga la tapa el splash; esto solo pinta el fondo del tema.
       home: !loaded
-          ? const _Startup()
+          ? const Scaffold()
           : hasConfig
           ? const SessionsScreen()
           : const ConnectionScreen(firstRun: true),
-    );
-  }
-}
-
-/// Arranque: logo, nombre y cuatro puntos de estado que saltan en secuencia.
-class _Startup extends StatefulWidget {
-  const _Startup();
-
-  @override
-  State<_Startup> createState() => _StartupState();
-}
-
-class _StartupState extends State<_Startup>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _ctl = AnimationController(
-    vsync: this,
-    duration: const Duration(milliseconds: 1200),
-  )..repeat();
-
-  @override
-  void dispose() {
-    _ctl.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final c = context.tc;
-    return Scaffold(
-      backgroundColor: c.bg,
-      body: Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Semantics(label: 'Logo de therd', child: const TherdLogo(size: 96)),
-            const SizedBox(height: 22),
-            Text(
-              'therd',
-              style: TextStyle(
-                fontSize: 28,
-                fontWeight: FontWeight.w600,
-                letterSpacing: -0.56,
-                color: c.text,
-              ),
-            ),
-            const SizedBox(height: 22),
-            Semantics(
-              label: 'Cargando',
-              child: SizedBox(
-                height: 16,
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    for (final (i, v) in const [
-                      ViewStatus.working,
-                      ViewStatus.blocked,
-                      ViewStatus.unread,
-                      ViewStatus.read,
-                    ].indexed) ...[
-                      if (i > 0) const SizedBox(width: 8),
-                      _HopDot(ctl: _ctl, delay: i * 0.125, status: v),
-                    ],
-                  ],
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _HopDot extends StatelessWidget {
-  const _HopDot({required this.ctl, required this.delay, required this.status});
-  final Animation<double> ctl;
-  final double delay;
-  final ViewStatus status;
-
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: ctl,
-      builder: (context, child) {
-        final t = (ctl.value - delay) % 1.0;
-        // 0 -> 1 -> 0 suave, como ease-in-out de 0% a 50% a 100%.
-        final k = 0.5 - 0.5 * math.cos(2 * math.pi * t);
-        return Opacity(
-          opacity: 0.25 + 0.75 * k,
-          child: Transform.translate(offset: Offset(0, -4 * k), child: child),
-        );
-      },
-      child: StatusDot(status, size: 9),
     );
   }
 }
