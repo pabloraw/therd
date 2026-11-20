@@ -147,6 +147,10 @@ class _SessionsScreenState extends ConsumerState<SessionsScreen> {
           children: [
             _Header(link: link, summary: top),
             ConnectionBanner(status: link),
+            VersionBanner(
+              daemonOutdated: state.daemonOutdated,
+              appOutdated: state.appOutdated,
+            ),
             if (state.opening.isNotEmpty) const _OpeningBanner(),
             Expanded(
               child: empty

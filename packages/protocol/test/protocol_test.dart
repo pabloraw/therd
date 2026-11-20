@@ -377,6 +377,20 @@ void main() {
 
     test('protocolVersion en hello', () {
       expect(const HelloMessage().toJson()['version'], protocolVersion);
+      expect(protocolVersion, 2);
+    });
+
+    test('hello roundtrip con versión', () {
+      final back =
+          Message.fromJson(const HelloMessage(version: 2).toJson())
+              as HelloMessage;
+      expect(back.version, 2);
+    });
+
+    test('hello sin versión cuenta como 1', () {
+      final json = const HelloMessage().toJson()..remove('version');
+      final back = Message.fromJson(json) as HelloMessage;
+      expect(back.version, 1);
     });
   });
 }

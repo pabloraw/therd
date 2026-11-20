@@ -17,6 +17,7 @@ Future<FakeClient> pumpList(
   WidgetTester tester, {
   List<WorkspaceInfo> workspaces = const [],
   List<SessionInfo> sessions = const [],
+  int daemonVersion = protocolVersion,
 }) async {
   final client = FakeClient();
   await tester.pumpWidget(
@@ -33,13 +34,42 @@ Future<FakeClient> pumpList(
   );
   await tester.pump();
   await tester.pump();
-  client.emit(HelloMessage(workspaces: workspaces, sessions: sessions));
+  client.emit(
+    HelloMessage(
+      version: daemonVersion,
+      workspaces: workspaces,
+      sessions: sessions,
+    ),
+  );
   await tester.pump();
   await tester.pump();
   return client;
 }
 
 void main() {
+  const oldDaemon =
+      'El daemon del PC es de una versión anterior: '
+      'actualízalo para usar todo.';
+  const oldApp = 'La app es de una versión anterior al daemon: actualízala.';
+
+  testWidgets('aviso si el daemon es de una versión anterior', (tester) async {
+    await pumpList(tester, daemonVersion: protocolVersion - 1);
+    expect(find.text(oldDaemon), findsOneWidget);
+    expect(find.text(oldApp), findsNothing);
+  });
+
+  testWidgets('aviso si la app es más vieja que el daemon', (tester) async {
+    await pumpList(tester, daemonVersion: protocolVersion + 1);
+    expect(find.text(oldApp), findsOneWidget);
+    expect(find.text(oldDaemon), findsNothing);
+  });
+
+  testWidgets('sin aviso si las versiones casan', (tester) async {
+    await pumpList(tester);
+    expect(find.text(oldApp), findsNothing);
+    expect(find.text(oldDaemon), findsNothing);
+  });
+
   testWidgets('lista con ramas, sin etiquetas de estado y filtros', (
     tester,
   ) async {

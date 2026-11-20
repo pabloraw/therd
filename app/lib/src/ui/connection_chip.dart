@@ -64,6 +64,53 @@ class ConnectionChip extends StatelessWidget {
   }
 }
 
+/// Franja persistente cuando las versiones de protocolo de la app y el daemon
+/// no casan. No bloquea: solo avisa de que parte de la app puede no funcionar.
+class VersionBanner extends StatelessWidget {
+  const VersionBanner({
+    super.key,
+    required this.daemonOutdated,
+    required this.appOutdated,
+  });
+
+  final bool daemonOutdated;
+  final bool appOutdated;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!daemonOutdated && !appOutdated) return const SizedBox.shrink();
+    final c = context.tc;
+    final text = appOutdated
+        ? 'La app es de una versión anterior al daemon: actualízala.'
+        : 'El daemon del PC es de una versión anterior: actualízalo para usar todo.';
+    return Semantics(
+      liveRegion: true,
+      child: Material(
+        color: c.waitSoft,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.only(top: 1),
+                child: Icon(Icons.info_outline, size: 16, color: c.waitFg),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  text,
+                  style: TextStyle(fontSize: 13, height: 1.45, color: c.waitFg),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 /// Franja a sangre bajo la cabecera cuando no hay conexión, 13 px.
 /// Reconectando: ámbar tenue con spinner. Token rechazado: rojo tenue con
 /// candado, tocable para abrir Conexión.

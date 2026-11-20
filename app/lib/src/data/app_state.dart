@@ -128,11 +128,24 @@ class AppState {
     this.notice,
     this.hellos = 0,
     this.opening = const {},
+    this.daemonProtocol,
   });
 
   /// Sesiones pedidas desde el móvil que aún no se han abierto, por opId:
   /// null mientras herdr arranca Claude, y luego el pane donde corre.
   final Map<String, String?> opening;
+
+  /// Versión de protocolo del daemon según su último hello; null mientras no
+  /// ha llegado ninguno.
+  final int? daemonProtocol;
+
+  /// El daemon habla un protocolo anterior al de la app.
+  bool get daemonOutdated =>
+      daemonProtocol != null && daemonProtocol! < protocolVersion;
+
+  /// El daemon habla un protocolo posterior al de la app.
+  bool get appOutdated =>
+      daemonProtocol != null && daemonProtocol! > protocolVersion;
 
   /// Cuántos `hello` se han recibido: permite saber si la lista de sesiones
   /// ya es fresca tras una reconexión.
@@ -183,6 +196,7 @@ class AppState {
     Notice? notice,
     int? hellos,
     Map<String, String?>? opening,
+    int? daemonProtocol,
   }) => AppState(
     opening: opening ?? this.opening,
     configLoaded: configLoaded ?? this.configLoaded,
@@ -195,6 +209,7 @@ class AppState {
     pending: pending ?? this.pending,
     notice: notice ?? this.notice,
     hellos: hellos ?? this.hellos,
+    daemonProtocol: daemonProtocol ?? this.daemonProtocol,
   );
 }
 
@@ -321,6 +336,7 @@ AppState reduce(AppState s, ServerMessage m, {DateTime? now}) {
         hellos: s.hellos + 1,
         // Una apertura en vuelo perdió su respuesta con la conexión.
         opening: const {},
+        daemonProtocol: m.version,
       );
     case SessionsMessage():
       // Una sesión suscrita que desaparece pierde su chat y sus pendientes;
