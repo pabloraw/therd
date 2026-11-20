@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -10,6 +9,7 @@ import '../data/therd_controller.dart';
 import 'chat_items.dart';
 import 'composer.dart';
 import 'connection_chip.dart';
+import 'context_ring.dart';
 import 'pending_bar.dart';
 import 'sessions_screen.dart';
 import 'theme.dart';
@@ -663,74 +663,6 @@ class _ChatHeader extends StatelessWidget {
       ),
     );
   }
-}
-
-/// Rosco con el porcentaje de la ventana de contexto que ocupa la sesión.
-/// Desde el 70 % se pinta en el color de aviso: falta poco para compactar.
-class ContextRing extends StatelessWidget {
-  const ContextRing({super.key, required this.used});
-
-  /// Fracción usada, de 0 a 1.
-  final double used;
-
-  @override
-  Widget build(BuildContext context) {
-    final c = context.tc;
-    final pct = (used * 100).round();
-    final color = pct >= 70 ? c.waitFg : c.muted;
-    return Semantics(
-      label: 'Contexto usado: $pct %',
-      excludeSemantics: true,
-      child: SizedBox.square(
-        dimension: 36,
-        child: CustomPaint(
-          painter: _RingPainter(used: used, track: c.line, color: color),
-          child: Center(
-            child: Text(
-              '$pct',
-              style: mono(size: 11, color: color, weight: FontWeight.w600),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _RingPainter extends CustomPainter {
-  const _RingPainter({
-    required this.used,
-    required this.track,
-    required this.color,
-  });
-
-  final double used;
-  final Color track;
-  final Color color;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    const stroke = 3.0;
-    final rect = (Offset.zero & size).deflate(stroke / 2);
-    final paint = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = stroke;
-    canvas.drawArc(rect, 0, 2 * math.pi, false, paint..color = track);
-    if (used <= 0) return;
-    canvas.drawArc(
-      rect,
-      -math.pi / 2,
-      2 * math.pi * used,
-      false,
-      paint
-        ..color = color
-        ..strokeCap = StrokeCap.round,
-    );
-  }
-
-  @override
-  bool shouldRepaint(_RingPainter old) =>
-      old.used != used || old.track != track || old.color != color;
 }
 
 /// Píldora flotante «N mensajes nuevos» que baja al final.

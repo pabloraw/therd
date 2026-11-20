@@ -7,6 +7,7 @@ import 'package:therd/src/data/therd_controller.dart';
 import 'package:therd/src/ui/chat_items.dart';
 import 'package:therd/src/ui/chat_screen.dart';
 import 'package:therd/src/ui/composer.dart';
+import 'package:therd/src/ui/context_ring.dart';
 import 'package:therd/src/ui/pending_bar.dart';
 import 'package:therd/src/ui/theme.dart';
 import 'package:therd/src/ui/tool_card.dart';
