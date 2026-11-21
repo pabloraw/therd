@@ -1,6 +1,6 @@
 name: therd_protocol
 description: Modelos y mensajes WebSocket compartidos entre el daemon y la app de therd.
-version: 0.2.0
+version: 0.3.0
 publish_to: none
 
 environment:

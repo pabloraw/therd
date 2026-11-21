@@ -2,7 +2,7 @@ name: therd
 description: "Vista de chat móvil para Claude Code dentro de herdr."
 publish_to: 'none'
 
-version: 0.2.0+2
+version: 0.3.0+3
 
 environment:
   sdk: ^3.10.7
