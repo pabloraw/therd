@@ -1,6 +1,3 @@
-import 'dart:math' as math;
-import 'dart:ui' show lerpDouble;
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -10,9 +7,9 @@ import 'theme.dart';
 ///
 /// Empieza donde la deja el arranque nativo: `th_` blanco sobre negro, como
 /// el icono. El cursor parpadea, termina de escribir `therd` (el texto se
-/// recentra con cada letra) y se abre hasta llenar la pantalla, dejando ver
-/// la app por el hueco. Si la app aún no está lista, el cursor sigue
-/// parpadeando hasta que lo esté.
+/// recentra con cada letra), se funde a negro y el negro se desvanece sobre
+/// la app. Si la app aún no está lista, el cursor sigue parpadeando hasta que
+/// lo esté.
 class SplashGate extends StatefulWidget {
   const SplashGate({super.key, required this.ready, required this.child});
 
@@ -37,11 +34,11 @@ class _SplashGateState extends State<SplashGate> with TickerProviderStateMixin {
     duration: const Duration(milliseconds: 900),
   );
 
-  /// Apertura del cursor hasta llenar la pantalla.
+  /// Salida: fundido a negro del texto y luego del negro sobre la app.
   late final AnimationController _reveal =
       AnimationController(
         vsync: this,
-        duration: const Duration(milliseconds: 620),
+        duration: const Duration(milliseconds: 450),
       )..addStatusListener((s) {
         if (s == AnimationStatus.completed) setState(() => _done = true);
       });
@@ -116,6 +113,11 @@ class _SplashGateState extends State<SplashGate> with TickerProviderStateMixin {
 
 const _kTypeDuration = Duration(milliseconds: 1250);
 
+// Salida (fracción de la duración de _reveal): el texto se apaga en el
+// primer 40 % y el negro empieza a irse a partir del 35 %.
+const _kTextOut = 0.4;
+const _kBgOutFrom = 0.35;
+
 /// Momento (fracción de _kTypeDuration) en que se teclea cada letra nueva.
 /// Ritmo algo irregular, como a mano.
 const _kKeys = [('e', 0.38), ('r', 0.46), ('d', 0.56)];
@@ -170,7 +172,7 @@ class _SplashPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final s = type.value;
-    final r = Curves.easeInOutCubic.transform(reveal.value);
+    final r = reveal.value;
     final k = _kBox / 108; // px por unidad de la caja
     final center = size.center(Offset.zero);
 
@@ -198,28 +200,20 @@ class _SplashPainter extends CustomPainter {
       y(_kBaseline + _kCursorHeight),
     );
 
-    // Fondo negro con un hueco que nace del cursor y crece hasta la pantalla.
-    final bg = Path()..addRect(Offset.zero & size);
-    if (r > 0) {
-      final hole = Rect.fromLTRB(
-        lerpDouble(cursor.left, -1, r)!,
-        lerpDouble(cursor.top, -1, r)!,
-        lerpDouble(cursor.right, size.width + 1, r)!,
-        lerpDouble(cursor.bottom, size.height + 1, r)!,
-      );
-      bg
-        ..fillType = PathFillType.evenOdd
-        ..addRRect(
-          RRect.fromRectAndRadius(
-            hole,
-            Radius.circular(28 * math.sin(math.pi * r)),
-          ),
+    // Salida en dos tiempos: `therd_` se funde a negro y luego el negro se
+    // desvanece sobre la app.
+    final textAlpha =
+        1 - Curves.easeIn.transform((r / _kTextOut).clamp(0.0, 1.0));
+    final bgAlpha =
+        1 -
+        Curves.easeInOut.transform(
+          ((r - _kBgOutFrom) / (1 - _kBgOutFrom)).clamp(0.0, 1.0),
         );
-    }
-    canvas.drawPath(bg, Paint()..color = _black);
+    canvas.drawRect(
+      Offset.zero & size,
+      Paint()..color = _black.withValues(alpha: bgAlpha),
+    );
 
-    // Las letras se desvanecen en cuanto el cursor empieza a abrirse.
-    final textAlpha = (1 - r * 3).clamp(0.0, 1.0);
     if (textAlpha > 0) {
       final fontSize = _kEm * k;
       final letters = [('t', -1.0), ('h', -1.0), for (final l in _kKeys) l];
@@ -250,8 +244,11 @@ class _SplashPainter extends CustomPainter {
     }
 
     // El cursor: parpadeo duro, como en una terminal.
-    if (r == 0 && _cursorOn(s)) {
-      canvas.drawRect(cursor, Paint()..color = _white);
+    if (textAlpha > 0 && (r > 0 || _cursorOn(s))) {
+      canvas.drawRect(
+        cursor,
+        Paint()..color = _white.withValues(alpha: textAlpha),
+      );
     }
   }
 
