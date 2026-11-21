@@ -6,6 +6,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:speech_to_text/speech_to_text.dart';
 import 'package:therd_protocol/protocol.dart';
 
+import 'haptics.dart';
 import 'theme.dart';
 
 /// Respuestas rápidas de cuando Claude ha terminado.
@@ -322,7 +323,10 @@ class _ComposerState extends State<Composer> {
                       _MicButton(
                         listening: _listening,
                         onPressed: widget.enabled && _speechReady != false
-                            ? _toggleMic
+                            ? () {
+                                Haptics.select();
+                                _toggleMic();
+                              }
                             : null,
                       ),
                       const SizedBox(width: 6),

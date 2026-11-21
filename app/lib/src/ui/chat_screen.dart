@@ -13,6 +13,7 @@ import 'connection_chip.dart';
 import 'context_ring.dart';
 import 'pending_bar.dart';
 import 'sessions_screen.dart';
+import 'haptics.dart';
 import 'theme.dart';
 
 /// Ruta de un chat, con nombre para saber cuál está abierto. [instant] la
@@ -325,6 +326,20 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     ref.listen(therdProvider.select((s) => s.sessions), (_, next) {
       _onSessions(next);
     });
+    // Lo que pasa con el chat delante también se nota en la mano.
+    ref.listen(
+      therdProvider.select((s) => s.pendingOf(id).map((p) => p.requestId)),
+      (prev, next) {
+        if (next.any((r) => !(prev?.contains(r) ?? true))) Haptics.attention();
+      },
+    );
+    ref.listen(therdProvider.select((s) => s.session(id)?.status), (
+      prev,
+      next,
+    ) {
+      final ended = next == SessionStatus.idle || next == SessionStatus.done;
+      if (prev == SessionStatus.working && ended) Haptics.done();
+    });
     if (session?.paneId != null) _paneId = session!.paneId;
 
     final status = session?.status ?? SessionStatus.unknown;
@@ -387,6 +402,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
               context,
               sessionId: id,
               onSend: (t) {
+                Haptics.send();
                 _justSent = true;
                 _ctl.sendPrompt(id, t);
               },
@@ -541,15 +557,23 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                       pending: pendings.first,
                       total: pendings.length,
                       onPermission:
-                          ({required allow, always = false, message}) =>
-                              _ctl.respondPermission(
-                                pendings.first.requestId,
-                                allow: allow,
-                                always: always,
-                                message: message,
-                              ),
-                      onAnswer: (a) => _ctl.answer(pendings.first.requestId, a),
-                      onRelease: () => _ctl.release(pendings.first.requestId),
+                          ({required allow, always = false, message}) {
+                            allow ? Haptics.send() : Haptics.stop();
+                            _ctl.respondPermission(
+                              pendings.first.requestId,
+                              allow: allow,
+                              always: always,
+                              message: message,
+                            );
+                          },
+                      onAnswer: (a) {
+                        Haptics.send();
+                        _ctl.answer(pendings.first.requestId, a);
+                      },
+                      onRelease: () {
+                        Haptics.select();
+                        _ctl.release(pendings.first.requestId);
+                      },
                     )
                   else
                     Composer(
@@ -563,10 +587,14 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                           ? kQuickReplies
                           : const [],
                       onSend: (t, images) {
+                        Haptics.send();
                         _justSent = true;
                         _ctl.sendPrompt(id, t, images: images);
                       },
-                      onStop: () => _ctl.interrupt(id),
+                      onStop: () {
+                        Haptics.stop();
+                        _ctl.interrupt(id);
+                      },
                     ),
                 ],
               ),

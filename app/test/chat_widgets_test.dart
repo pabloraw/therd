@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:therd/src/core/connection_config.dart';
@@ -366,6 +367,42 @@ void main() {
     await tester.tap(find.byTooltip('Detener'));
     await tester.pump();
     expect(client.sentOf<InterruptMessage>().single.sessionId, 's1');
+  });
+
+  group('háptica', () {
+    /// Apunta cada golpe de háptica que la app pide a la plataforma.
+    List<Object?> recordHaptics(WidgetTester tester) {
+      final haptics = <Object?>[];
+      final messenger = tester.binding.defaultBinaryMessenger;
+      messenger.setMockMethodCallHandler(SystemChannels.platform, (call) async {
+        if (call.method == 'HapticFeedback.vibrate') {
+          haptics.add(call.arguments);
+        }
+        return null;
+      });
+      addTearDown(
+        () => messenger.setMockMethodCallHandler(SystemChannels.platform, null),
+      );
+      return haptics;
+    }
+
+    testWidgets('golpe medio al enviar', (tester) async {
+      final haptics = recordHaptics(tester);
+      await pumpChat(tester);
+      await tester.enterText(find.byType(TextField), 'haz algo');
+      await tester.pump();
+      await tester.tap(find.byTooltip('Enviar'));
+      await tester.pump();
+      expect(haptics, ['HapticFeedbackType.mediumImpact']);
+    });
+
+    testWidgets('golpe fuerte al detener', (tester) async {
+      final haptics = recordHaptics(tester);
+      await pumpChat(tester, status: SessionStatus.working);
+      await tester.tap(find.byTooltip('Detener'));
+      await tester.pump();
+      expect(haptics, ['HapticFeedbackType.heavyImpact']);
+    });
   });
 
   testWidgets('enviar un prompt y mostrar el error agent_blocked', (

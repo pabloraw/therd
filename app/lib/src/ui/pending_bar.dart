@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:gpt_markdown/gpt_markdown.dart';
 import 'package:therd_protocol/protocol.dart';
 
+import 'haptics.dart';
 import 'theme.dart';
 import 'tool_card.dart';
 
@@ -576,7 +577,10 @@ class _QuestionCardState extends State<QuestionCard> {
               description: o.description,
               multi: qs[qi].multiSelect,
               selected: _choices[qi].labels.contains(o.label),
-              onTap: () => _toggle(qi, o.label),
+              onTap: () {
+                Haptics.select();
+                _toggle(qi, o.label);
+              },
             ),
           // El texto libre va dentro de la propia opción, no como otra fila.
           _OptionRow(
@@ -584,7 +588,10 @@ class _QuestionCardState extends State<QuestionCard> {
             description: '',
             multi: qs[qi].multiSelect,
             selected: _choices[qi].other,
-            onTap: () => _toggleOther(qi),
+            onTap: () {
+              Haptics.select();
+              _toggleOther(qi);
+            },
             child: _choices[qi].other
                 ? TextField(
                     controller: _choices[qi].text,

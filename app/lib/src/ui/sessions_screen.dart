@@ -10,6 +10,7 @@ import 'connection_chip.dart';
 import 'connection_screen.dart';
 import 'context_ring.dart';
 import 'session_actions.dart';
+import 'haptics.dart';
 import 'theme.dart';
 
 /// Último tramo de una ruta, para nombrar sesiones sin título.
@@ -188,7 +189,10 @@ class _SessionsScreenState extends ConsumerState<SessionsScreen> {
                 filter: _filter,
                 waiting: waiting,
                 unread: unread,
-                onChanged: (f) => setState(() => _filter = f),
+                onChanged: (f) {
+                  if (f != _filter) Haptics.select();
+                  setState(() => _filter = f);
+                },
               ),
           ],
         ),
