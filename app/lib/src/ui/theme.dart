@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:therd_protocol/protocol.dart';
 
@@ -407,25 +409,152 @@ String viewLabel(ViewStatus v) => switch (v) {
 
 /// Punto de estado: relleno, salvo «leído» y «desconocido», que son un anillo
 /// de 2 px.
-class StatusDot extends StatelessWidget {
+///
+/// Los cambios de estado se animan: el color se mezcla y el relleno crece o
+/// mengua desde el centro. Al entrar en «te espera» el punto da un salto y
+/// suelta una onda; al entrar en «sin leer», solo el salto. Al aparecer no se
+/// anima (si no, toda la lista latiría al abrirla).
+class StatusDot extends StatefulWidget {
   const StatusDot(this.status, {super.key, this.size = 11});
   final ViewStatus status;
   final double size;
 
   @override
+  State<StatusDot> createState() => _StatusDotState();
+}
+
+class _StatusDotState extends State<StatusDot> with TickerProviderStateMixin {
+  /// Mezcla del estado anterior al nuevo (1 = ya en el nuevo).
+  late final AnimationController _change = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 280),
+    value: 1,
+  );
+
+  /// Salto y onda al llegar a un estado que pide atención (1 = en reposo).
+  late final AnimationController _pulse = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 750),
+    value: 1,
+  );
+
+  late Color _fromColor = viewColor(widget.status);
+  late double _fromFill = _fill(widget.status);
+  bool _ripple = false;
+
+  static double _fill(ViewStatus s) =>
+      s == ViewStatus.read || s == ViewStatus.unknown ? 0 : 1;
+
+  @override
+  void didUpdateWidget(StatusDot old) {
+    super.didUpdateWidget(old);
+    if (old.status == widget.status) return;
+    // Se parte de lo que se ve ahora, aunque la mezcla anterior no acabara.
+    final t = Curves.easeOut.transform(_change.value);
+    _fromColor = Color.lerp(_fromColor, viewColor(old.status), t)!;
+    _fromFill += (_fill(old.status) - _fromFill) * t;
+    if (MediaQuery.maybeDisableAnimationsOf(context) ?? false) {
+      _change.value = 1;
+      return;
+    }
+    _change.forward(from: 0);
+    if (widget.status == ViewStatus.blocked ||
+        widget.status == ViewStatus.unread) {
+      _ripple = widget.status == ViewStatus.blocked;
+      _pulse.forward(from: 0);
+    }
+  }
+
+  @override
+  void dispose() {
+    _change.dispose();
+    _pulse.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final color = viewColor(status);
-    final hollow = status == ViewStatus.read || status == ViewStatus.unknown;
-    return Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        color: hollow ? null : color,
-        border: hollow ? Border.all(color: color, width: 2) : null,
-      ),
+    return AnimatedBuilder(
+      animation: Listenable.merge([_change, _pulse]),
+      builder: (context, _) {
+        final t = Curves.easeOut.transform(_change.value);
+        final to = viewColor(widget.status);
+        return CustomPaint(
+          size: Size.square(widget.size),
+          painter: _DotPainter(
+            color: Color.lerp(_fromColor, to, t)!,
+            fill: _fromFill + (_fill(widget.status) - _fromFill) * t,
+            pulse: _pulse.value,
+            ripple: _ripple,
+          ),
+        );
+      },
     );
   }
+}
+
+class _DotPainter extends CustomPainter {
+  const _DotPainter({
+    required this.color,
+    required this.fill,
+    required this.pulse,
+    required this.ripple,
+  });
+
+  final Color color;
+
+  /// 0 = anillo, 1 = relleno.
+  final double fill;
+
+  /// Progreso del salto y la onda (1 = en reposo).
+  final double pulse;
+  final bool ripple;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final c = size.center(Offset.zero);
+    final r = size.shortestSide / 2;
+
+    // Onda: sale del punto, crece hasta casi tres veces y se apaga.
+    if (ripple && pulse < 1) {
+      final k = Curves.easeOutCubic.transform(pulse);
+      canvas.drawCircle(
+        c,
+        r * (1 + 1.8 * k),
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1.5
+          ..color = color.withValues(alpha: 0.55 * (1 - k)),
+      );
+    }
+
+    // Salto: crece un 35 % y vuelve, en el primer 40 % del pulso.
+    final pop = pulse < 0.4 ? math.sin(math.pi * pulse / 0.4) : 0.0;
+    final rr = r * (1 + 0.35 * pop);
+
+    // Anillo de 2 px que engorda hacia dentro hasta cerrarse en un punto
+    // relleno: una sola pieza, sin juntas que dejen ver una raya.
+    if (fill >= 1) {
+      canvas.drawCircle(c, rr, Paint()..color = color);
+    } else {
+      final sw = 2 + (rr - 2) * fill;
+      canvas.drawCircle(
+        c,
+        rr - sw / 2,
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = sw
+          ..color = color,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(_DotPainter old) =>
+      old.color != color ||
+      old.fill != fill ||
+      old.pulse != pulse ||
+      old.ripple != ripple;
 }
 
 /// Spinner fino para estados de carga y reconexión.
