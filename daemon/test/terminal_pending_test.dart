@@ -6,6 +6,7 @@ import 'package:therd_daemon/src/hook_event.dart';
 import 'package:therd_daemon/src/hook_router.dart';
 import 'package:therd_daemon/src/pending.dart';
 import 'package:therd_daemon/src/session_store.dart';
+import 'package:therd_daemon/src/terminal_dialogs.dart';
 import 'package:therd_daemon/src/transcript_tailer.dart';
 import 'package:therd_protocol/protocol.dart';
 
@@ -38,6 +39,7 @@ void main() {
       keyPause: Duration.zero,
       confirmAttempts: 5,
       planFallbackDelay: const Duration(milliseconds: 30),
+      hookAnswerGrace: Duration.zero,
     );
   });
 
@@ -438,6 +440,83 @@ void main() {
       final held = await hold();
       await Future<void>.delayed(const Duration(milliseconds: 80));
       expect(pendings.byId(held.requestId), isNotNull);
+    });
+  });
+
+  group('retenido contestado desde la app', () {
+    // El fixture enseña el diálogo de `touch prueba2.txt`.
+    Future<Pending> hold(String command) async {
+      await router.hold(permission(input: {'command': command}));
+      return pendings.forSession('s1').single;
+    }
+
+    test(
+      'si Claude Code ignora el allow del hook, se pulsa en el terminal',
+      () async {
+        final held = await hold('touch prueba2.txt');
+        pendings.respondPermission(held.requestId, allow: true);
+        await settle();
+        expect(term.sent, [
+          ['1'],
+        ]);
+      },
+    );
+
+    test('denegar con el diálogo aún abierto pulsa «No»', () async {
+      final held = await hold('touch prueba2.txt');
+      pendings.respondPermission(held.requestId, allow: false);
+      await settle();
+      expect(term.sent, [
+        ['4'],
+      ]);
+    });
+
+    test('si Claude Code aceptó el hook, no se pulsa nada', () async {
+      final held = await hold('touch prueba2.txt');
+      term.screen = 'nada';
+      pendings.respondPermission(held.requestId, allow: true);
+      await settle();
+      expect(term.sent, isEmpty);
+    });
+
+    test('no pulsa en el diálogo de otro permiso', () async {
+      final held = await hold('touch prueba.txt');
+      pendings.respondPermission(held.requestId, allow: true);
+      await settle();
+      expect(term.sent, isEmpty);
+    });
+  });
+
+  group('dialogIsFor', () {
+    Pending pending(Map<String, dynamic> input, [String tool = 'Write']) =>
+        Pending(
+          requestId: 'r',
+          sessionId: 's1',
+          kind: PendingKind.permission,
+          toolName: tool,
+          toolInput: input,
+          createdAt: DateTime.now(),
+        );
+
+    test('Write: reconoce el archivo por su nombre', () {
+      final screen = fixture('permiso_write');
+      expect(
+        dialogIsFor(pending({'file_path': '/tmp/proyecto/hola.txt'}), screen),
+        isTrue,
+      );
+      expect(
+        dialogIsFor(pending({'file_path': '/tmp/proyecto/adios.txt'}), screen),
+        isFalse,
+      );
+    });
+
+    test('Bash: no confunde la cabecera de la llamada con el diálogo', () {
+      // «touch prueba.txt» sale arriba, en la sesión anterior, no en el recuadro.
+      final screen = fixture('permiso_bash');
+      expect(
+        dialogIsFor(pending({'command': 'touch prueba.txt'}, 'Bash'), screen),
+        isFalse,
+      );
     });
   });
 }

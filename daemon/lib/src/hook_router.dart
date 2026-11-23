@@ -30,6 +30,7 @@ class HookRouter implements HookHandler {
     this.keyPause = const Duration(milliseconds: 150),
     this.confirmAttempts = 8,
     this.planFallbackDelay = const Duration(seconds: 2),
+    this.hookAnswerGrace = const Duration(seconds: 2),
     this.onTurnEnd,
   }) : plansDir = plansDir ?? p.join(p.dirname(projectsDir), 'plans'),
        _hasClients = hasClients {
@@ -53,6 +54,11 @@ class HookRouter implements HookHandler {
   /// Lo que se espera al `PermissionRequest` de un plan antes de abrirlo
   /// desde su `PreToolUse` (ver [_planFallback]).
   final Duration planFallbackDelay;
+
+  /// Lo que se deja a Claude Code para aplicar la respuesta de un hook
+  /// retenido antes de mirar si su diálogo sigue abierto (ver
+  /// [_checkHookAnswer]).
+  final Duration hookAnswerGrace;
 
   /// Llamado con el hook `Stop` (fin de turno), antes de cancelar pendientes.
   final void Function(String sessionId)? onTurnEnd;
@@ -417,7 +423,18 @@ class HookRouter implements HookHandler {
       }
     }());
 
-    final r = await handle.result;
+    await _answerByKeys(pending, pane, kind, await handle.result);
+  }
+
+  /// Pulsa en el terminal la respuesta [r] de la app. Contestar en el PC,
+  /// cancelado o expirado no pulsan nada.
+  Future<void> _answerByKeys(
+    Pending pending,
+    String pane,
+    DialogKind kind,
+    PendingResult r,
+  ) async {
+    final io = terminal!;
     final body = r.body;
     try {
       switch (r.resolution) {
@@ -485,7 +502,49 @@ class HookRouter implements HookHandler {
     final stored = store.upsertPendingItem(sid, item);
     _itemIds[pending.requestId] = stored?.id ?? item.id;
     store.setStatus(sid, SessionStatus.blocked);
-    return pendings.open(pending);
+    final handle = pendings.open(pending);
+    if (terminal != null && pending.kind != PendingKind.question) {
+      unawaited(
+        handle.result.then((r) => _checkHookAnswer(pending, r)).catchError((
+          Object err,
+          StackTrace st,
+        ) {
+          Log.error('comprobar la respuesta del hook', err, st);
+        }),
+      );
+    }
+    return handle;
+  }
+
+  /// Claude Code abre su diálogo en el terminal mientras espera al hook y,
+  /// cuando el permiso exige a una persona, descarta el `allow` del hook y
+  /// el diálogo sigue esperando (pasa en 2.1.330 con una regla `ask` de
+  /// settings en modo auto: «Rule … overrides auto mode»). La app enseñaba
+  /// «Permitido» y la sesión se quedaba parada. Así que, contestado el
+  /// retenido, si el mismo diálogo sigue en pantalla se contesta con teclas.
+  Future<void> _checkHookAnswer(Pending p0, PendingResult r) async {
+    if (r.resolution != Resolution.allowed &&
+        r.resolution != Resolution.denied) {
+      return;
+    }
+    final sid = p0.sessionId;
+    final pane = store.info(sid)?.paneId;
+    if (pane == null) return;
+    await Future<void>.delayed(hookAnswerGrace);
+    final kind = _kindOfPending(p0);
+    final String screen;
+    try {
+      screen = await terminal!.readVisible(pane);
+    } on HerdrException catch (err) {
+      Log.warn('No se pudo leer el terminal de $pane: ${err.message}');
+      return;
+    }
+    if (!dialogShown(kind, screen) || !dialogIsFor(p0, screen)) return;
+    Log.info(
+      'Claude Code no aceptó la respuesta del hook ${p0.toolName} en '
+      '${sid.length > 8 ? sid.substring(0, 8) : sid}: la pulso en el terminal',
+    );
+    await _answerByKeys(p0, pane, kind, r);
   }
 
   /// Pendiente y tarjeta de chat de un evento retenible. Es lo mismo se

@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:path/path.dart' as p_path;
 import 'package:therd_protocol/protocol.dart';
 
 import 'herdr_client.dart';
@@ -83,6 +84,37 @@ bool questionDialogShown(String screen) {
   }
   return flat.contains('Esc to cancel') && flat.contains('Chat about this');
 }
+
+/// ¿El diálogo de la pantalla es el de [p]? Sirve para no pulsar teclas en
+/// otro permiso que salió detrás (dos Bash en paralelo, por ejemplo). Se
+/// busca, dentro del recuadro del diálogo (lo que sigue a la última línea de
+/// `─`), el principio de algún texto del input: el comando, o el nombre del
+/// archivo de una ruta. El plan no se comprueba: solo puede haber uno.
+bool dialogIsFor(Pending p, String screen) {
+  if (p.kind == PendingKind.plan) return true;
+  final lines = screen.split('\n');
+  final top = lines.lastIndexWhere(
+    (l) => RegExp(r'^\s*─{10,}\s*$').hasMatch(l),
+  );
+  if (top < 0) return false;
+  final box = _plain(lines.skip(top + 1).join('\n'));
+  for (final v in p.toolInput.values) {
+    if (v is! String) continue;
+    final s = _plain(v);
+    if (s.length >= 4 && box.contains(s.length > 40 ? s.substring(0, 40) : s)) {
+      return true;
+    }
+    // Write y Edit enseñan la ruta relativa o solo el nombre.
+    if (v.startsWith('/')) {
+      final name = p_path.basename(v);
+      if (name.length >= 3 && box.contains(name)) return true;
+    }
+  }
+  return false;
+}
+
+/// Texto sin los bordes del recuadro y con los espacios colapsados.
+String _plain(String s) => flatten(s.replaceAll(RegExp('[│╌]'), ' ')).trim();
 
 bool dialogShown(DialogKind kind, String screen) => switch (kind) {
   DialogKind.permission => permissionOptions(screen) != null,
