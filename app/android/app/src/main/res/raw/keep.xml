@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- ic_stat_therd solo se referencia por nombre desde Dart (flutter_local_notifications):
+     sin esto, el encogido de recursos del build release lo eliminaría. -->
+<resources xmlns:tools="http://schemas.android.com/tools"
+    tools:keep="@drawable/ic_stat_therd" />

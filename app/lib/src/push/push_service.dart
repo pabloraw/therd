@@ -157,7 +157,7 @@ class PushService implements DeepLinkSource {
 const _channelId = 'pendientes';
 
 const _initSettings = InitializationSettings(
-  android: AndroidInitializationSettings('ic_launcher_monochrome'),
+  android: AndroidInitializationSettings('ic_stat_therd'),
 );
 
 NotificationDetails _details(
