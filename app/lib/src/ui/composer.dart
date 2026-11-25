@@ -149,6 +149,25 @@ class _ComposerState extends State<Composer> {
     setState(() => _images.addAll(picked));
   }
 
+  /// Imagen que mete el teclado en el campo (en Gboard, desde la tira del
+  /// portapapeles: capturas e imágenes copiadas). Va sin redimensionar; el
+  /// daemon admite hasta 15 MB y Claude reduce lo que pase de 1568 px.
+  void _onKeyboardContent(KeyboardInsertedContent content) {
+    final bytes = content.data;
+    if (bytes == null || bytes.isEmpty) {
+      _snack('No se pudo leer la imagen pegada.');
+      return;
+    }
+    if (_images.length >= kMaxImages) {
+      _snack('Caben $kMaxImages imágenes por mensaje.');
+      return;
+    }
+    final mime = content.mimeType == 'image/jpg'
+        ? 'image/jpeg'
+        : content.mimeType;
+    setState(() => _images.add(_Attachment(mime, bytes)));
+  }
+
   void _snack(String text) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
@@ -272,6 +291,10 @@ class _ComposerState extends State<Composer> {
                   maxLines: 6,
                   textCapitalization: TextCapitalization.sentences,
                   onChanged: (_) => setState(() {}),
+                  contentInsertionConfiguration: ContentInsertionConfiguration(
+                    allowedMimeTypes: _kPasteMimes,
+                    onContentInserted: _onKeyboardContent,
+                  ),
                   style: TextStyle(fontSize: 16, height: 1.4, color: c.text),
                   decoration: InputDecoration(
                     hintText: hint,
@@ -508,6 +531,9 @@ class _Attachment {
   final String mime;
   final Uint8List bytes;
 }
+
+/// Tipos que el teclado puede pegar en el campo; los mismos que acepta el daemon.
+const _kPasteMimes = ['image/png', 'image/jpeg', 'image/webp', 'image/gif'];
 
 String? _mimeOf(XFile f) {
   final m = f.mimeType;
