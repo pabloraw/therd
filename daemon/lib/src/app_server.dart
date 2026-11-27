@@ -30,6 +30,8 @@ class AppServer {
     required this.herdr,
     this.host = '127.0.0.1',
     this.lanHosts = const [],
+    this.daemonId,
+    this.machine,
     this.port = 24601,
     this.authTimeout = const Duration(seconds: 10),
     this.interruptDelay = const Duration(milliseconds: 300),
@@ -70,6 +72,10 @@ class AppServer {
 
   /// IPs de la red local donde se escucha además de [host] (mismo puerto).
   final List<String> lanHosts;
+
+  /// Van en el hello: con qué ordenador ha conectado la app.
+  final String? daemonId;
+  final String? machine;
   int port;
   final Duration authTimeout;
   final Duration interruptDelay;
@@ -244,6 +250,8 @@ class AppServer {
         sessions: store.sessions,
         workspaces: store.workspaces,
         lanHosts: lanBound,
+        daemonId: daemonId,
+        machine: machine,
       ),
     );
   }

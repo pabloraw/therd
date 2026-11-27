@@ -5,6 +5,7 @@ import 'package:therd_protocol/protocol.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
 import '../core/connection_config.dart';
+import '../data/deep_link.dart';
 import '../data/therd_client.dart';
 
 /// Botones de la notificación de un pendiente.
@@ -26,12 +27,26 @@ abstract final class QuickAction {
 
 /// Lo que lleva la notificación para abrir el chat o contestar.
 class NotificationPayload {
-  const NotificationPayload({required this.sessionId, this.requestId});
+  const NotificationPayload({
+    required this.sessionId,
+    this.requestId,
+    this.daemonId,
+  });
 
   final String sessionId;
   final String? requestId;
 
-  String encode() => jsonEncode({'s': sessionId, 'r': requestId});
+  /// Daemon que mandó el aviso; null en daemons antiguos (= el activo).
+  final String? daemonId;
+
+  String encode() => jsonEncode({
+    's': sessionId,
+    'r': requestId,
+    if (daemonId != null) 'd': daemonId,
+  });
+
+  /// Enlace que abre el chat (en su ordenador si se sabe cuál es).
+  Uri get link => sessionLink(sessionId, daemonId: daemonId);
 
   /// Acepta también el formato antiguo (solo el sessionId).
   static NotificationPayload? decode(String? raw) {
@@ -42,6 +57,7 @@ class NotificationPayload {
         return NotificationPayload(
           sessionId: j['s'] as String,
           requestId: j['r'] as String?,
+          daemonId: j['d'] as String?,
         );
       }
     } catch (_) {

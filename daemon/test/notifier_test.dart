@@ -257,7 +257,11 @@ void pushTests() {
     await ntfy.stop();
   });
 
-  PendingNotifier make(PushRegistry reg, {String? topicUrl}) => PendingNotifier(
+  PendingNotifier make(
+    PushRegistry reg, {
+    String? topicUrl,
+    PushSender? sender,
+  }) => PendingNotifier(
     events: pm.events,
     client: topicUrl == null
         ? null
@@ -266,7 +270,17 @@ void pushTests() {
     sessionInfo: (_) =>
         const SessionInfo(sessionId: 's1', title: 'Arreglar login'),
     push: reg,
+    sender: sender,
   );
+
+  test('cada aviso dice de qué daemon viene', () async {
+    final reg = PushRegistry()..register('${ntfy.url}/upABC?up=1');
+    final n = make(reg, sender: PushSender(daemonId: 'd1'));
+    pm.open(pend('r1'));
+    await Future.wait(n.inFlight);
+    expect(PushPayload.daemonIdOf(ntfy.posts.single), 'd1');
+    expect(PushPayload.fromJson(ntfy.posts.single), isA<PushPending>());
+  });
 
   test('registro: valida, deduplica, olvida el anterior y persiste', () {
     final dir = Directory.systemTemp.createTempSync('therd-push');

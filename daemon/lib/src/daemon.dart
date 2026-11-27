@@ -66,6 +66,8 @@ class Daemon {
     herdr: herdr,
     host: appHost,
     lanHosts: lanHosts,
+    daemonId: config.id.isEmpty ? null : config.id,
+    machine: Platform.localHostname,
     port: config.appPort,
     push: push,
     seen: seen,
@@ -87,6 +89,7 @@ class Daemon {
     hasClients: () => appServer.clientCount > 0,
     sessionInfo: store.info,
     push: push,
+    sender: pushSender,
   );
 
   /// Aviso de fin de turno si nadie ha visto la sesión.
@@ -96,6 +99,13 @@ class Daemon {
     client: config.ntfy == null ? null : NtfyClient(config.ntfy!),
     hasClients: () => appServer.clientCount > 0,
     push: push,
+    sender: pushSender,
+  );
+
+  /// Los avisos llevan el id del daemon: con varios ordenadores emparejados,
+  /// la app sabe a cuál contestar.
+  late final PushSender pushSender = PushSender(
+    daemonId: config.id.isEmpty ? null : config.id,
   );
 
   /// Endpoints de UnifiedPush que registran las apps.

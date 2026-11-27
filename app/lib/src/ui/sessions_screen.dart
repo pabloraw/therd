@@ -2,12 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:therd_protocol/protocol.dart';
 
+import '../core/computer.dart';
 import '../data/app_state.dart';
 import '../data/therd_client.dart';
 import '../data/therd_controller.dart';
 import 'chat_screen.dart';
 import 'connection_chip.dart';
-import 'connection_screen.dart';
+import 'computers_screen.dart';
 import 'context_ring.dart';
 import 'session_actions.dart';
 import 'haptics.dart';
@@ -147,7 +148,7 @@ class _SessionsScreenState extends ConsumerState<SessionsScreen> {
         bottom: false,
         child: Column(
           children: [
-            _Header(link: link, summary: top),
+            _Header(link: link, summary: top, computers: state.computers),
             ConnectionBanner(status: link),
             VersionBanner(
               daemonOutdated: state.daemonOutdated,
@@ -202,15 +203,28 @@ class _SessionsScreenState extends ConsumerState<SessionsScreen> {
 }
 
 /// Cabecera propia: logo con punto resumen, título, estado de conexión y
-/// ajustes.
-class _Header extends StatelessWidget {
-  const _Header({required this.link, required this.summary});
+/// ajustes. Con varios ordenadores, el título es el ordenador en uso y al
+/// tocarlo se cambia de uno a otro.
+class _Header extends ConsumerWidget {
+  const _Header({
+    required this.link,
+    required this.summary,
+    required this.computers,
+  });
   final LinkStatus link;
   final ViewStatus? summary;
+  final SavedComputers computers;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final c = context.tc;
+    final several = computers.list.length > 1;
+    final titleStyle = TextStyle(
+      fontSize: 20,
+      fontWeight: FontWeight.w700,
+      letterSpacing: -0.2,
+      color: c.text,
+    );
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 14, 8, 6),
       child: Row(
@@ -246,25 +260,41 @@ class _Header extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  'Sesiones',
-                  style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: -0.2,
-                    color: c.text,
-                  ),
-                ),
+                if (several)
+                  Semantics(
+                    button: true,
+                    hint: 'Cambiar de ordenador',
+                    child: InkWell(
+                      borderRadius: Tk.br,
+                      onTap: () => showComputerSwitcher(context, ref),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Flexible(
+                            child: Text(
+                              computers.active?.displayName ?? 'Sesiones',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: titleStyle,
+                            ),
+                          ),
+                          Icon(Icons.expand_more, size: 22, color: c.muted),
+                        ],
+                      ),
+                    ),
+                  )
+                else
+                  Text('Sesiones', style: titleStyle),
                 ConnectionChip(status: link),
               ],
             ),
           ),
           IconButton(
-            tooltip: 'Conexión',
+            tooltip: 'Ordenadores',
             icon: const Icon(Icons.tune, size: 20),
             onPressed: () => Navigator.of(
               context,
-            ).push(MaterialPageRoute(builder: (_) => const ConnectionScreen())),
+            ).push(MaterialPageRoute(builder: (_) => const ComputersScreen())),
           ),
         ],
       ),

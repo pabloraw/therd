@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:therd_protocol/protocol.dart';
 
+import '../core/computer.dart';
 import '../core/connection_config.dart';
 import '../core/settings_store.dart';
 import 'app_state.dart';
@@ -52,9 +53,14 @@ class TherdController extends Notifier<AppState> {
   }
 
   Future<void> _bootstrap() async {
-    final config = await _store.load();
+    final computers = await _store.loadComputers();
     final seen = await _store.loadSeen();
-    state = state.copyWith(configLoaded: true, config: config, seen: seen);
+    state = state.copyWith(
+      configLoaded: true,
+      computers: computers,
+      seen: seen,
+    );
+    final config = state.config;
     if (config != null && !_paused) _client.connect(config);
   }
 
@@ -120,7 +126,7 @@ class TherdController extends Notifier<AppState> {
     state = reduce(state, m);
     if (m is HelloMessage) {
       _sendPush();
-      _learnLan(m.lanHosts);
+      _learnFromHello(m);
     }
     _markSeen();
     if (m is SessionsMessage && state.link.isConnected) {
@@ -133,17 +139,40 @@ class TherdController extends Notifier<AppState> {
     }
   }
 
-  /// El daemon dice en qué IPs de la red local escucha: se guardan para
-  /// probarlas primero la próxima vez (y poder apagar Tailscale en casa).
-  /// Un daemon antiguo no manda ninguna; entonces se dejan las que había.
-  void _learnLan(List<String> lan) {
-    final c = state.config;
-    if (c == null || lan.isEmpty || listEquals(c.lanHosts, lan)) return;
-    final next = c.withLanHosts(lan);
-    state = state.copyWith(config: next);
-    _client.updateConfig(next);
-    unawaited(_store.save(next));
+  /// Lo que el daemon cuenta de sí en el hello se guarda en su ordenador:
+  /// las IPs de la red local (para probarlas primero la próxima vez y poder
+  /// apagar Tailscale en casa), su id (para reconocer sus avisos) y su
+  /// hostname (nombre por defecto). Un daemon antiguo no manda nada de esto;
+  /// entonces se deja lo que había.
+  void _learnFromHello(HelloMessage m) {
+    final pc = state.computer;
+    if (pc == null) return;
+    var next = pc;
+    if (m.lanHosts.isNotEmpty && !listEquals(pc.config.lanHosts, m.lanHosts)) {
+      next = next.copyWith(config: pc.config.withLanHosts(m.lanHosts));
+    }
+    if (m.daemonId != null && m.daemonId != pc.daemonId) {
+      next = next.copyWith(daemonId: m.daemonId);
+    }
+    if (m.machine != null && m.machine != pc.machine) {
+      next = next.copyWith(machine: m.machine);
+    }
+    if (next == pc) return;
+    if (next.config != pc.config) _client.updateConfig(next.config);
+    _replace(next);
+    unawaited(_persist());
   }
+
+  void _replace(Computer pc) {
+    final c = state.computers;
+    state = state.copyWith(
+      computers: SavedComputers([
+        for (final x in c.list) x.id == pc.id ? pc : x,
+      ], c.activeId),
+    );
+  }
+
+  Future<void> _persist() => _store.saveComputers(state.computers);
 
   void _onLink(LinkStatus status) {
     final wasConnected = state.link.isConnected;
@@ -169,18 +198,108 @@ class TherdController extends Notifier<AppState> {
 
   // ------------------------------------------------------------ conexión
 
-  Future<void> saveConfig(ConnectionConfig config) async {
-    await _store.save(config);
-    state = state.copyWith(config: config);
-    _paused = false;
-    _client.connect(config);
+  /// Añade un ordenador y pasa a él. Si ya había uno con el mismo host y
+  /// puerto, se actualiza ese en vez de duplicarlo.
+  Future<void> addComputer(ConnectionConfig config, {String? name}) async {
+    for (final pc in state.computers.list) {
+      if (pc.config.host == config.host && pc.config.port == config.port) {
+        return updateComputer(pc.id, config, name: name);
+      }
+    }
+    final pc = Computer(
+      id: Computer.newId(),
+      config: config,
+      name: _blankToNull(name),
+    );
+    final c = state.computers;
+    state = state.copyWith(
+      computers: SavedComputers([...c.list, pc], c.activeId),
+    );
+    await switchTo(pc.id);
   }
 
-  Future<void> forget() async {
-    await _store.clear();
+  /// Cambia la conexión y el nombre de un ordenador y pasa a él.
+  Future<void> updateComputer(
+    String id,
+    ConnectionConfig config, {
+    String? name,
+  }) async {
+    final pc = state.computers.byId(id);
+    if (pc == null) return;
+    final n = _blankToNull(name);
+    final next = pc.copyWith(config: config, name: n, clearName: n == null);
+    _replace(next);
+    if (state.computers.activeId == id && pc.config == config) {
+      await _persist();
+      return;
+    }
+    // Conexión distinta: se empieza de cero aunque sea el activo.
+    await switchTo(id, force: true);
+  }
+
+  /// Pasa a otro ordenador: cierra la conexión, olvida sus sesiones y
+  /// conecta con el nuevo.
+  Future<void> switchTo(String id, {bool force = false}) async {
+    final pc = state.computers.byId(id);
+    if (pc == null) return;
+    if (!force && state.computers.activeId == id) return;
     _client.disconnect();
+    _resetSession();
+    state = AppState(
+      configLoaded: true,
+      computers: SavedComputers(state.computers.list, id),
+      seen: state.seen,
+      hellos: state.hellos,
+    );
+    await _persist();
+    if (!_paused) _client.connect(pc.config);
+  }
+
+  /// Olvida un ordenador. Si era el activo, se pasa al siguiente que quede.
+  Future<void> removeComputer(String id) async {
+    final c = state.computers;
+    if (c.byId(id) == null) return;
+    final wasActive = c.activeId == id;
+    // Que su daemon deje de mandar avisos a este móvil.
+    final e = _pushEndpoint;
+    if (wasActive && e != null && state.link.isConnected) {
+      _client.send(PushUnregisterMessage(endpoint: e));
+    }
+    final rest = [
+      for (final x in c.list)
+        if (x.id != id) x,
+    ];
+    if (!wasActive) {
+      state = state.copyWith(computers: SavedComputers(rest, c.activeId));
+      await _persist();
+      return;
+    }
+    _client.disconnect();
+    _resetSession();
+    final next = rest.firstOrNull;
+    state = AppState(
+      configLoaded: true,
+      computers: SavedComputers(rest, next?.id),
+      seen: state.seen,
+      hellos: state.hellos,
+    );
+    await _persist();
+    if (next != null && !_paused) _client.connect(next.config);
+  }
+
+  /// Olvida el ordenador en uso.
+  Future<void> forget() async {
+    final id = state.computers.activeId;
+    if (id != null) await removeComputer(id);
+  }
+
+  void _resetSession() {
     _subscribed.clear();
-    state = const AppState(configLoaded: true);
+    _sentSeen.clear();
+    for (final t in _openTimers.values) {
+      t.cancel();
+    }
+    _openTimers.clear();
   }
 
   /// La app pasa a segundo plano: se cierra el socket.

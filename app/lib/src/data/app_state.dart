@@ -2,6 +2,7 @@ import 'dart:typed_data';
 
 import 'package:therd_protocol/protocol.dart';
 
+import '../core/computer.dart';
 import '../core/connection_config.dart';
 import 'therd_client.dart';
 
@@ -118,7 +119,7 @@ class ChatState {
 class AppState {
   const AppState({
     this.configLoaded = false,
-    this.config,
+    this.computers = const SavedComputers(),
     this.link = const LinkStatus(LinkState.disconnected),
     this.sessions = const [],
     this.workspaces = const [],
@@ -152,7 +153,14 @@ class AppState {
   final int hellos;
 
   final bool configLoaded;
-  final ConnectionConfig? config;
+
+  /// Ordenadores emparejados; sesiones, chats y pendientes son del activo.
+  final SavedComputers computers;
+
+  Computer? get computer => computers.active;
+
+  /// Conexión del ordenador en uso; null sin emparejar.
+  ConnectionConfig? get config => computers.active?.config;
   final LinkStatus link;
   final List<SessionInfo> sessions;
   final List<WorkspaceInfo> workspaces;
@@ -185,8 +193,7 @@ class AppState {
 
   AppState copyWith({
     bool? configLoaded,
-    ConnectionConfig? config,
-    bool clearConfig = false,
+    SavedComputers? computers,
     LinkStatus? link,
     List<SessionInfo>? sessions,
     List<WorkspaceInfo>? workspaces,
@@ -200,7 +207,7 @@ class AppState {
   }) => AppState(
     opening: opening ?? this.opening,
     configLoaded: configLoaded ?? this.configLoaded,
-    config: clearConfig ? null : (config ?? this.config),
+    computers: computers ?? this.computers,
     link: link ?? this.link,
     sessions: sessions ?? this.sessions,
     workspaces: workspaces ?? this.workspaces,

@@ -15,17 +15,24 @@ Future<FakeClient> pump(
   WidgetTester tester, {
   bool firstRun = false,
   ConnectionConfig? config,
+  MemorySettingsStore? store,
 }) async {
   final client = FakeClient();
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
         clientProvider.overrideWithValue(client),
-        settingsStoreProvider.overrideWithValue(MemorySettingsStore(config)),
+        settingsStoreProvider.overrideWithValue(
+          store ?? MemorySettingsStore(config),
+        ),
       ],
       child: MaterialApp(
         theme: buildTheme(Brightness.dark),
-        home: ConnectionScreen(firstRun: firstRun),
+        // Con configuración se edita su ordenador (pc1 en el almacén falso).
+        home: ConnectionScreen(
+          firstRun: firstRun,
+          computerId: config == null ? null : 'pc1',
+        ),
       ),
     ),
   );
@@ -42,7 +49,29 @@ void main() {
     expect(find.text('Hola, conecta tu PC'), findsOneWidget);
     expect(find.byTooltip('Volver'), findsNothing);
     expect(find.text('Host'), findsNothing);
-    expect(find.text('Olvidar este emparejamiento'), findsNothing);
+    expect(find.text('Olvidar este ordenador'), findsNothing);
+  });
+
+  testWidgets('añadir otro ordenador lo guarda con su nombre y pasa a él', (
+    tester,
+  ) async {
+    final store = MemorySettingsStore(cfg);
+    final client = await pump(tester, store: store);
+    expect(find.text('Añadir ordenador'), findsOneWidget);
+    expect(find.text('Olvidar este ordenador'), findsNothing);
+    await tester.tap(find.text('Escribir los datos a mano'));
+    await tester.pump();
+    await tester.enterText(find.byType(TextFormField).at(0), '100.9.9.9');
+    await tester.enterText(find.byType(TextFormField).at(2), 'otro');
+    await tester.enterText(find.byType(TextFormField).at(3), 'Trabajo');
+    await tester.tap(find.text('Guardar y conectar'));
+    await tester.pump();
+    final list = store.computers.list;
+    expect(list, hasLength(2));
+    expect(list.last.name, 'Trabajo');
+    expect(store.computers.activeId, list.last.id);
+    expect(store.value!.host, '100.9.9.9');
+    expect(client.connects, greaterThanOrEqualTo(2));
   });
 
   testWidgets('guardar con campos vacíos abre el desplegable y marca errores', (
@@ -61,7 +90,7 @@ void main() {
     final client = await pump(tester, config: cfg);
     expect(find.text('Conexión'), findsOneWidget);
     expect(find.byTooltip('Volver'), findsOneWidget);
-    expect(find.text('Olvidar este emparejamiento'), findsOneWidget);
+    expect(find.text('Olvidar este ordenador'), findsOneWidget);
     // La configuración se carga después de montar: se escribe a mano.
     await tester.enterText(find.byType(TextFormField).at(0), '100.1.1.1');
     await tester.enterText(find.byType(TextFormField).at(2), 'tk');

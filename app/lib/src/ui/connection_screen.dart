@@ -6,12 +6,15 @@ import '../data/therd_controller.dart';
 import 'qr_scan_screen.dart';
 import 'theme.dart';
 
-/// Conexión y ajustes: QR o host, puerto y token a mano.
+/// Emparejar un ordenador: QR o host, puerto y token a mano.
 class ConnectionScreen extends ConsumerStatefulWidget {
-  const ConnectionScreen({super.key, this.firstRun = false});
+  const ConnectionScreen({super.key, this.firstRun = false, this.computerId});
 
   /// Primera vez (sin configuración): no hay pantalla a la que volver.
   final bool firstRun;
+
+  /// Ordenador que se edita; null = añadir uno nuevo.
+  final String? computerId;
 
   @override
   ConsumerState<ConnectionScreen> createState() => _ConnectionScreenState();
@@ -21,6 +24,7 @@ class _ConnectionScreenState extends ConsumerState<ConnectionScreen> {
   late final TextEditingController _host;
   late final TextEditingController _port;
   late final TextEditingController _token;
+  late final TextEditingController _name;
   final _formKey = GlobalKey<FormState>();
   bool _testing = false;
   String? _result;
@@ -40,8 +44,11 @@ class _ConnectionScreenState extends ConsumerState<ConnectionScreen> {
   @override
   void initState() {
     super.initState();
-    final c = ref.read(therdProvider).config;
-    _manualOpen = !widget.firstRun || c != null;
+    final pc = ref.read(therdProvider).computers.byId(widget.computerId);
+    final c = pc?.config;
+    _machine = pc?.machine;
+    _name = TextEditingController(text: pc?.name ?? '');
+    _manualOpen = _editing || c != null;
     _lan = c?.lanHosts ?? const [];
     _lanOf = c?.host ?? '';
     _host = TextEditingController(text: c?.host ?? '');
@@ -56,8 +63,14 @@ class _ConnectionScreenState extends ConsumerState<ConnectionScreen> {
     _host.dispose();
     _port.dispose();
     _token.dispose();
+    _name.dispose();
     super.dispose();
   }
+
+  bool get _editing => widget.computerId != null;
+
+  /// Hostname que anunció el daemon: sugerencia para el nombre.
+  String? _machine;
 
   ConnectionConfig? _readForm() {
     if (!_formKey.currentState!.validate()) {
@@ -118,20 +131,31 @@ class _ConnectionScreenState extends ConsumerState<ConnectionScreen> {
   Future<void> _save() async {
     final c = _readForm();
     if (c == null) return;
-    await ref.read(therdProvider.notifier).saveConfig(c);
+    final ctl = ref.read(therdProvider.notifier);
+    final id = widget.computerId;
+    final exists = ref.read(therdProvider).computers.byId(id) != null;
+    if (id != null && exists) {
+      await ctl.updateComputer(id, c, name: _name.text);
+    } else {
+      await ctl.addComputer(c, name: _name.text);
+    }
     if (mounted && !widget.firstRun) Navigator.of(context).pop();
   }
 
   Future<void> _forget() async {
-    await ref.read(therdProvider.notifier).forget();
+    final id = widget.computerId;
+    if (id != null) await ref.read(therdProvider.notifier).removeComputer(id);
     if (mounted && !widget.firstRun) Navigator.of(context).pop();
   }
 
   @override
   Widget build(BuildContext context) {
     final c = context.tc;
-    final hasConfig = ref.watch(therdProvider.select((s) => s.config != null));
-    final title = widget.firstRun ? 'Hola, conecta tu PC' : 'Conexión';
+    final title = widget.firstRun
+        ? 'Hola, conecta tu PC'
+        : _editing
+        ? 'Conexión'
+        : 'Añadir ordenador';
     return Scaffold(
       backgroundColor: c.bg,
       body: SafeArea(
@@ -291,7 +315,7 @@ class _ConnectionScreenState extends ConsumerState<ConnectionScreen> {
                       const SizedBox(height: 22),
                       _resultLine(c),
                     ],
-                    if (hasConfig && !widget.firstRun) ...[
+                    if (_editing && !widget.firstRun) ...[
                       const SizedBox(height: 10),
                       TextButton(
                         onPressed: _forget,
@@ -305,7 +329,7 @@ class _ConnectionScreenState extends ConsumerState<ConnectionScreen> {
                             decoration: TextDecoration.underline,
                           ),
                         ),
-                        child: const Text('Olvidar este emparejamiento'),
+                        child: const Text('Olvidar este ordenador'),
                       ),
                     ],
                   ],
@@ -475,6 +499,21 @@ class _ConnectionScreenState extends ConsumerState<ConnectionScreen> {
                 ),
               ),
             ],
+          ),
+          const SizedBox(height: 14),
+          _label(
+            c,
+            'Nombre',
+            TextFormField(
+              controller: _name,
+              style: TextStyle(fontSize: 15, color: c.text),
+              decoration: _deco(
+                c,
+                hint: _machine ?? 'Trabajo, Personal…',
+                help: 'Opcional, para distinguirlo si emparejas varios',
+              ).copyWith(hintStyle: TextStyle(fontSize: 15, color: c.muted)),
+              textCapitalization: TextCapitalization.sentences,
+            ),
           ),
         ],
       ),

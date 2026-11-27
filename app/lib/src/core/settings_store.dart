@@ -2,13 +2,13 @@ import 'dart:convert';
 
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'computer.dart';
 import 'connection_config.dart';
 
-/// Guarda y recupera la conexión emparejada y lo leído por sesión.
+/// Guarda y recupera los ordenadores emparejados y lo leído por sesión.
 abstract class SettingsStore {
-  Future<ConnectionConfig?> load();
-  Future<void> save(ConnectionConfig config);
-  Future<void> clear();
+  Future<SavedComputers> loadComputers();
+  Future<void> saveComputers(SavedComputers computers);
 
   /// Último seq visto en el móvil por sessionId.
   Future<Map<String, int>> loadSeen();
@@ -16,11 +16,14 @@ abstract class SettingsStore {
 }
 
 class PrefsSettingsStore implements SettingsStore {
+  static const _kComputers = 'computers';
+  static const _kSeen = 'seen';
+
+  // Formato antiguo: un solo emparejamiento suelto.
   static const _kHost = 'host';
   static const _kPort = 'port';
   static const _kToken = 'token';
   static const _kLan = 'lanHosts';
-  static const _kSeen = 'seen';
 
   @override
   Future<Map<String, int>> loadSeen() async {
@@ -46,45 +49,78 @@ class PrefsSettingsStore implements SettingsStore {
   }
 
   @override
-  Future<ConnectionConfig?> load() async {
+  Future<SavedComputers> loadComputers() async {
     final p = await SharedPreferences.getInstance();
+    final raw = p.getString(_kComputers);
+    if (raw != null) {
+      try {
+        final j = jsonDecode(raw);
+        if (j is Map) {
+          final list = [
+            if (j['list'] case final List<dynamic> l)
+              for (final e in l) ?Computer.fromJson(e),
+          ];
+          final active = j['active'] as String?;
+          return SavedComputers(
+            list,
+            list.any((c) => c.id == active) ? active : list.firstOrNull?.id,
+          );
+        }
+      } catch (_) {
+        // Se intenta el formato antiguo.
+      }
+    }
+    return _legacy(p);
+  }
+
+  /// El emparejamiento de antes de poder guardar varios pasa a ser el
+  /// primero de la lista; al guardar se escribe ya en el formato nuevo.
+  SavedComputers _legacy(SharedPreferences p) {
     final host = p.getString(_kHost);
     final token = p.getString(_kToken);
     if (host == null || host.isEmpty || token == null || token.isEmpty) {
-      return null;
+      return const SavedComputers();
     }
-    return ConnectionConfig(
-      host: host,
-      port: p.getInt(_kPort) ?? ConnectionConfig.defaultPort,
-      token: token,
-      lanHosts: p.getStringList(_kLan) ?? const [],
+    final pc = Computer(
+      id: 'pc1',
+      config: ConnectionConfig(
+        host: host,
+        port: p.getInt(_kPort) ?? ConnectionConfig.defaultPort,
+        token: token,
+        lanHosts: p.getStringList(_kLan) ?? const [],
+      ),
     );
+    return SavedComputers([pc], pc.id);
   }
 
   @override
-  Future<void> save(ConnectionConfig c) async {
+  Future<void> saveComputers(SavedComputers c) async {
     final p = await SharedPreferences.getInstance();
-    await p.setString(_kHost, c.host);
-    await p.setInt(_kPort, c.port);
-    await p.setString(_kToken, c.token);
-    await p.setStringList(_kLan, c.lanHosts);
-  }
-
-  @override
-  Future<void> clear() async {
-    final p = await SharedPreferences.getInstance();
-    await p.remove(_kHost);
-    await p.remove(_kPort);
-    await p.remove(_kToken);
-    await p.remove(_kLan);
+    await p.setString(
+      _kComputers,
+      jsonEncode({
+        'active': c.activeId,
+        'list': [for (final pc in c.list) pc.toJson()],
+      }),
+    );
+    for (final k in [_kHost, _kPort, _kToken, _kLan]) {
+      await p.remove(k);
+    }
   }
 }
 
-/// Almacén en memoria (tests).
+/// Almacén en memoria (tests). Con [config] empieza con un ordenador `pc1`.
 class MemorySettingsStore implements SettingsStore {
-  MemorySettingsStore([this.value]);
-  ConnectionConfig? value;
+  MemorySettingsStore([ConnectionConfig? config])
+    : computers = config == null
+          ? const SavedComputers()
+          : SavedComputers([Computer(id: 'pc1', config: config)], 'pc1');
+
+  SavedComputers computers;
   Map<String, int> seen = {};
+
+  /// Conexión del ordenador en uso.
+  ConnectionConfig? get value => computers.active?.config;
 
   @override
   Future<Map<String, int>> loadSeen() async => Map.of(seen);
@@ -93,11 +129,8 @@ class MemorySettingsStore implements SettingsStore {
   Future<void> saveSeen(Map<String, int> s) async => seen = Map.of(s);
 
   @override
-  Future<ConnectionConfig?> load() async => value;
+  Future<SavedComputers> loadComputers() async => computers;
 
   @override
-  Future<void> save(ConnectionConfig config) async => value = config;
-
-  @override
-  Future<void> clear() async => value = null;
+  Future<void> saveComputers(SavedComputers c) async => computers = c;
 }

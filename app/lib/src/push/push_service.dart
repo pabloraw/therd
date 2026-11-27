@@ -100,11 +100,20 @@ class PushService implements DeepLinkSource {
 
   Future<void> _onMessage(PushMessage m) async {
     final PushPayload? p;
+    final String? daemonId;
     try {
       final j = jsonDecode(utf8.decode(m.content));
-      p = j is Map ? PushPayload.fromJson(Map<String, dynamic>.from(j)) : null;
+      final map = j is Map ? Map<String, dynamic>.from(j) : null;
+      p = map == null ? null : PushPayload.fromJson(map);
+      daemonId = map == null ? null : PushPayload.daemonIdOf(map);
     } catch (_) {
       return;
+    }
+    // Con varios ordenadores, la cabecera del aviso dice de cuál viene.
+    String? from;
+    if (p is PushPending || p is PushTurnDone) {
+      final saved = await PrefsSettingsStore().loadComputers();
+      if (saved.list.length > 1) from = saved.byDaemon(daemonId)?.displayName;
     }
     switch (p) {
       case PushPending():
@@ -115,9 +124,11 @@ class PushService implements DeepLinkSource {
           payload: NotificationPayload(
             sessionId: p.sessionId,
             requestId: p.requestId,
+            daemonId: daemonId,
           ).encode(),
           notificationDetails: _details(
             p.body,
+            subText: from,
             actions: [
               for (final (id, label) in QuickAction.forKind(p.kind))
                 AndroidNotificationAction(id, label),
@@ -131,8 +142,11 @@ class PushService implements DeepLinkSource {
           id: notificationId('turno:${p.sessionId}'),
           title: p.title,
           body: p.body,
-          payload: NotificationPayload(sessionId: p.sessionId).encode(),
-          notificationDetails: _details(p.body),
+          payload: NotificationPayload(
+            sessionId: p.sessionId,
+            daemonId: daemonId,
+          ).encode(),
+          notificationDetails: _details(p.body, subText: from),
         );
       case PushTurnCleared():
         await _notifications.cancel(id: notificationId('turno:${p.sessionId}'));
@@ -150,7 +164,7 @@ class PushService implements DeepLinkSource {
     }
     final p = NotificationPayload.decode(r.payload);
     if (p == null) return;
-    _taps.add(Uri(scheme: 'therd', host: 'session', path: '/${p.sessionId}'));
+    _taps.add(p.link);
   }
 }
 
@@ -162,6 +176,7 @@ const _initSettings = InitializationSettings(
 
 NotificationDetails _details(
   String body, {
+  String? subText,
   List<AndroidNotificationAction> actions = const [],
 }) => NotificationDetails(
   android: AndroidNotificationDetails(
@@ -173,6 +188,7 @@ NotificationDetails _details(
     priority: Priority.high,
     category: AndroidNotificationCategory.message,
     styleInformation: BigTextStyleInformation(body),
+    subText: subText,
     actions: actions,
   ),
 );
@@ -198,7 +214,9 @@ Future<void> handleNotificationAction(
   if (p == null || rid == null) return;
   final msg = quickMessage(r.actionId, rid);
   if (msg == null) return;
-  final config = await PrefsSettingsStore().load();
+  // Al ordenador que mandó el aviso, aunque en la app esté abierto otro.
+  final saved = await PrefsSettingsStore().loadComputers();
+  final config = saved.forDaemon(p.daemonId)?.config;
   final error = config == null
       ? 'La app no está emparejada'
       : await sendQuickReply(config, msg, rid);
@@ -208,7 +226,10 @@ Future<void> handleNotificationAction(
     id: notificationId(rid),
     title: 'No se pudo contestar',
     body: body,
-    payload: NotificationPayload(sessionId: p.sessionId).encode(),
+    payload: NotificationPayload(
+      sessionId: p.sessionId,
+      daemonId: p.daemonId,
+    ).encode(),
     notificationDetails: _details(body),
   );
 }

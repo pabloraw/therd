@@ -57,8 +57,17 @@ final class HelloMessage extends ServerMessage {
     this.sessions = const [],
     this.workspaces = const [],
     this.lanHosts = const [],
+    this.daemonId,
+    this.machine,
   });
   final int version;
+
+  /// Identificador estable del daemon: la app lo usa para saber de qué
+  /// ordenador viene un aviso. null en daemons antiguos.
+  final String? daemonId;
+
+  /// Nombre del ordenador (hostname), para el nombre por defecto en la app.
+  final String? machine;
   final List<SessionInfo> sessions;
   final List<WorkspaceInfo> workspaces;
 
@@ -73,6 +82,8 @@ final class HelloMessage extends ServerMessage {
     'sessions': [for (final s in sessions) s.toJson()],
     'workspaces': [for (final w in workspaces) w.toJson()],
     if (lanHosts.isNotEmpty) 'lanHosts': lanHosts,
+    if (daemonId != null) 'daemonId': daemonId,
+    if (machine != null) 'machine': machine,
   };
 }
 
@@ -528,6 +539,8 @@ Message? _decode(Map<String, dynamic> j) {
             for (final h in l)
               if (h is String && h.isNotEmpty) h,
         ],
+        daemonId: j['daemonId'] as String?,
+        machine: j['machine'] as String?,
       );
     case 'sessions':
       return SessionsMessage(

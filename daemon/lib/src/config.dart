@@ -94,6 +94,7 @@ class NtfyConfig {
 class TherdConfig {
   TherdConfig({
     required this.token,
+    this.id = '',
     this.hookPort = 24600,
     this.appPort = 24601,
     this.bindHost,
@@ -110,6 +111,10 @@ class TherdConfig {
   NtfyConfig? ntfy;
 
   String token;
+
+  /// Identificador estable de este daemon (no es secreto): la app distingue
+  /// con él los avisos de cada ordenador emparejado.
+  String id;
   int hookPort;
   int appPort;
 
@@ -121,6 +126,7 @@ class TherdConfig {
 
   factory TherdConfig.fromJson(Map<String, dynamic> j) => TherdConfig(
     token: j['token'] as String? ?? '',
+    id: j['id'] as String? ?? '',
     hookPort: (j['hookPort'] as num?)?.toInt() ?? 24600,
     appPort: (j['appPort'] as num?)?.toInt() ?? 24601,
     bindHost: j['bindHost'] as String?,
@@ -133,6 +139,7 @@ class TherdConfig {
 
   Map<String, dynamic> toJson() => {
     'token': token,
+    'id': id,
     'hookPort': hookPort,
     'appPort': appPort,
     'bindHost': bindHost,
@@ -141,10 +148,10 @@ class TherdConfig {
     if (ntfy != null) 'ntfy': ntfy!.toJson(),
   };
 
-  static String generateToken() {
+  static String generateToken([int bytes = 32]) {
     final r = Random.secure();
     return [
-      for (var i = 0; i < 32; i++)
+      for (var i = 0; i < bytes; i++)
         r.nextInt(256).toRadixString(16).padLeft(2, '0'),
     ].join();
   }
@@ -173,6 +180,10 @@ class TherdConfig {
     }
     if (cfg.token.isEmpty) {
       cfg.token = generateToken();
+      dirty = true;
+    }
+    if (cfg.id.isEmpty) {
+      cfg.id = generateToken(8);
       dirty = true;
     }
     if (dirty && create) cfg.save(paths);

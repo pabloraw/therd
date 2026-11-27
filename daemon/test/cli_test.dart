@@ -52,6 +52,14 @@ void main() {
     expect(out.toString(), contains('█'));
     expect(renderQr('hola').split('\n').length, greaterThan(10));
     expect(cfg.token, hasLength(64));
+    // Id estable del daemon, creado una vez y guardado.
+    expect(cfg.id, hasLength(16));
+    expect(
+      TherdConfig.load(
+        TherdPaths(home: tmp.path, configDir: '${tmp.path}/cfg'),
+      ).id,
+      cfg.id,
+    );
   });
 
   test(

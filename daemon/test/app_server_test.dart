@@ -110,6 +110,8 @@ void main() {
       herdr: herdr,
       port: 0,
       lanHosts: const ['127.0.0.2', '203.0.113.9'],
+      daemonId: 'd1',
+      machine: 'sobremesa',
     );
     await lan.start();
     addTearDown(lan.stop);
@@ -119,6 +121,8 @@ void main() {
     );
     final hello = await c.next<HelloMessage>();
     expect(hello.lanHosts, ['127.0.0.2']);
+    expect(hello.daemonId, 'd1');
+    expect(hello.machine, 'sobremesa');
     await c.ws.close();
   });
 

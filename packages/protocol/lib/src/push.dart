@@ -9,6 +9,10 @@ sealed class PushPayload {
 
   Map<String, dynamic> toJson();
 
+  /// Daemon que manda el aviso (lo añade el emisor junto al resto del JSON);
+  /// null en daemons antiguos.
+  static String? daemonIdOf(Map<String, dynamic> j) => j['daemonId'] as String?;
+
   /// null si no es un aviso de therd.
   static PushPayload? fromJson(Map<String, dynamic> j) {
     switch (j['type']) {

@@ -1,8 +1,8 @@
-import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:therd/src/core/computer.dart';
 import 'package:therd/src/core/connection_config.dart';
 import 'package:therd/src/core/settings_store.dart';
 import 'package:therd/src/data/therd_client.dart';
@@ -65,16 +65,17 @@ void main() {
       expect(c.hosts, ['100.1.1.1']);
     });
 
-    test('el almacén guarda las IPs locales', () async {
-      final store = MemorySettingsStore();
-      const c = ConnectionConfig(
-        host: '100.1.1.1',
-        port: 1,
-        token: 't',
-        lanHosts: ['192.168.1.5'],
+    test('las IPs locales sobreviven a guardar y leer', () {
+      const pc = Computer(
+        id: 'pc1',
+        config: ConnectionConfig(
+          host: '100.1.1.1',
+          port: 1,
+          token: 't',
+          lanHosts: ['192.168.1.5'],
+        ),
       );
-      await store.save(c);
-      expect(await store.load(), c);
+      expect(Computer.fromJson(pc.toJson()), pc);
     });
   });
 

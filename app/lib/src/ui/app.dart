@@ -60,9 +60,15 @@ class _TherdAppState extends ConsumerState<TherdApp> {
     final s = ref.read(therdProvider);
     if (s.configLoaded && s.config == null) return; // sin emparejar: se ignora
     _pendingId = id;
+    // Aviso de otro ordenador: se pasa a él antes de abrir el chat.
+    final target = s.computers.byDaemon(parseLinkDaemon(uri));
+    final switching = target != null && target.id != s.computers.activeId;
+    if (switching) {
+      unawaited(ref.read(therdProvider.notifier).switchTo(target.id));
+    }
     // Con el socket vivo la lista de sesiones ya está al día; si no, hay que
     // esperar al `hello` de la reconexión para saber si la sesión existe.
-    _needsFreshHello = !s.link.isConnected || s.hellos == 0;
+    _needsFreshHello = switching || !s.link.isConnected || s.hellos == 0;
     _helloAtLink = s.hellos;
     // Si nunca llega a conectar, el enlace caduca y no abre nada por sorpresa.
     _giveUp?.cancel();

@@ -130,9 +130,12 @@ String pendingSummary(Pending p, {int max = 140}) {
 /// Envía avisos a endpoints de UnifiedPush: POST con el JSON de
 /// [PushPayload]. ntfy se lo pasa a la app therd, que pinta su notificación.
 class PushSender {
-  PushSender({this.timeout = const Duration(seconds: 5)});
+  PushSender({this.timeout = const Duration(seconds: 5), this.daemonId});
 
   final Duration timeout;
+
+  /// Va en cada aviso para que la app sepa de qué ordenador viene.
+  final String? daemonId;
   final Set<String> _warned = {};
 
   /// Devuelve true si el servidor aceptó el aviso. Nunca lanza.
@@ -142,7 +145,14 @@ class PushSender {
     try {
       final req = await client.postUrl(Uri.parse(endpoint)).timeout(timeout);
       req.headers.contentType = ContentType.json;
-      req.add(utf8.encode(jsonEncode(payload.toJson())));
+      req.add(
+        utf8.encode(
+          jsonEncode({
+            ...payload.toJson(),
+            if (daemonId != null) 'daemonId': daemonId,
+          }),
+        ),
+      );
       final res = await req.close().timeout(timeout);
       await res.drain<void>().timeout(timeout);
       if (res.statusCode >= 200 && res.statusCode < 300) {

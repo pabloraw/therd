@@ -10,6 +10,20 @@ String? parseSessionLink(Uri uri) {
   return segments.first;
 }
 
+/// Daemon del enlace (`?pc=<daemonId>`), o null si no lo dice.
+String? parseLinkDaemon(Uri uri) {
+  final pc = uri.queryParameters['pc'];
+  return pc == null || pc.isEmpty ? null : pc;
+}
+
+/// `therd://session/<id>`, con `?pc=<daemonId>` si se sabe el ordenador.
+Uri sessionLink(String sessionId, {String? daemonId}) => Uri(
+  scheme: 'therd',
+  host: 'session',
+  path: '/$sessionId',
+  queryParameters: daemonId == null ? null : {'pc': daemonId},
+);
+
 /// Origen de enlaces entrantes (arranque en frío y app ya abierta). Es una
 /// interfaz para poder sustituirlo en los tests.
 abstract class DeepLinkSource {
