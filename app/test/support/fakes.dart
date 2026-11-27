@@ -35,6 +35,11 @@ class FakeClient implements TherdClient {
     setLink(const LinkStatus(LinkState.connected));
   }
 
+  ConnectionConfig? updated;
+
+  @override
+  void updateConfig(ConnectionConfig config) => updated = config;
+
   @override
   void disconnect() => setLink(const LinkStatus(LinkState.disconnected));
 

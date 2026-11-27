@@ -19,6 +19,7 @@ class PrefsSettingsStore implements SettingsStore {
   static const _kHost = 'host';
   static const _kPort = 'port';
   static const _kToken = 'token';
+  static const _kLan = 'lanHosts';
   static const _kSeen = 'seen';
 
   @override
@@ -56,6 +57,7 @@ class PrefsSettingsStore implements SettingsStore {
       host: host,
       port: p.getInt(_kPort) ?? ConnectionConfig.defaultPort,
       token: token,
+      lanHosts: p.getStringList(_kLan) ?? const [],
     );
   }
 
@@ -65,6 +67,7 @@ class PrefsSettingsStore implements SettingsStore {
     await p.setString(_kHost, c.host);
     await p.setInt(_kPort, c.port);
     await p.setString(_kToken, c.token);
+    await p.setStringList(_kLan, c.lanHosts);
   }
 
   @override
@@ -73,6 +76,7 @@ class PrefsSettingsStore implements SettingsStore {
     await p.remove(_kHost);
     await p.remove(_kPort);
     await p.remove(_kToken);
+    await p.remove(_kLan);
   }
 }
 

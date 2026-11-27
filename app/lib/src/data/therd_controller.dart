@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:therd_protocol/protocol.dart';
 
@@ -117,7 +118,10 @@ class TherdController extends Notifier<AppState> {
     // Conexión nueva (quizá a un daemon reiniciado): se vuelve a avisar.
     if (m is HelloMessage) _sentSeen.clear();
     state = reduce(state, m);
-    if (m is HelloMessage) _sendPush();
+    if (m is HelloMessage) {
+      _sendPush();
+      _learnLan(m.lanHosts);
+    }
     _markSeen();
     if (m is SessionsMessage && state.link.isConnected) {
       // Sesión suscrita que reapareció tras desaparecer: se pide de nuevo.
@@ -127,6 +131,18 @@ class TherdController extends Notifier<AppState> {
         }
       }
     }
+  }
+
+  /// El daemon dice en qué IPs de la red local escucha: se guardan para
+  /// probarlas primero la próxima vez (y poder apagar Tailscale en casa).
+  /// Un daemon antiguo no manda ninguna; entonces se dejan las que había.
+  void _learnLan(List<String> lan) {
+    final c = state.config;
+    if (c == null || lan.isEmpty || listEquals(c.lanHosts, lan)) return;
+    final next = c.withLanHosts(lan);
+    state = state.copyWith(config: next);
+    _client.updateConfig(next);
+    unawaited(_store.save(next));
   }
 
   void _onLink(LinkStatus status) {

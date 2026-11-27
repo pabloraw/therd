@@ -15,9 +15,17 @@ enum LinkState {
 
 /// Estado del enlace con el daemon.
 class LinkStatus {
-  const LinkStatus(this.state, {this.attempt = 0, this.error});
+  const LinkStatus(
+    this.state, {
+    this.attempt = 0,
+    this.error,
+    this.lan = false,
+  });
 
   final LinkState state;
+
+  /// Conectado por la red local en vez de por Tailscale.
+  final bool lan;
 
   /// Número de intento de reconexión en curso (0 si no aplica).
   final int attempt;
@@ -27,7 +35,7 @@ class LinkStatus {
 
   /// Texto corto para la interfaz.
   String get label => switch (state) {
-    LinkState.connected => 'Conectado',
+    LinkState.connected => lan ? 'Conectado (red local)' : 'Conectado',
     LinkState.connecting => 'Conectando',
     LinkState.reconnecting => 'Reconectando (intento $attempt)',
     LinkState.unauthorized => 'Token rechazado',
@@ -39,10 +47,11 @@ class LinkStatus {
       other is LinkStatus &&
       other.state == state &&
       other.attempt == attempt &&
-      other.error == error;
+      other.error == error &&
+      other.lan == lan;
 
   @override
-  int get hashCode => Object.hash(state, attempt, error);
+  int get hashCode => Object.hash(state, attempt, error, lan);
 }
 
 /// Cliente del protocolo WebSocket del daemon (interfaz para poder falsearlo).
@@ -57,6 +66,9 @@ abstract class TherdClient {
 
   /// Conecta (o reconecta con backoff) con [config]. Sustituye a la anterior.
   void connect(ConnectionConfig config);
+
+  /// Cambia la configuración sin cortar la conexión (se usa al reconectar).
+  void updateConfig(ConnectionConfig config);
 
   /// Cierra y deja de reconectar.
   void disconnect();
@@ -76,6 +88,10 @@ class WebSocketTherdClient implements TherdClient {
   static const _pingEvery = Duration(seconds: 20);
   static const _deadAfter = Duration(seconds: 60);
 
+  /// Lo que se espera a una IP de la red local antes de pasar a la
+  /// siguiente: en casa responde al momento; fuera no responde nunca.
+  static const lanTimeout = Duration(milliseconds: 2500);
+
   final _messages = StreamController<ServerMessage>.broadcast();
   final _link = StreamController<LinkStatus>.broadcast();
   LinkStatus _current = const LinkStatus(LinkState.disconnected);
@@ -88,6 +104,9 @@ class WebSocketTherdClient implements TherdClient {
   Timer? _pingTimer;
   DateTime _lastRx = DateTime.now();
   int _attempt = 0;
+
+  /// Dirección de `_config.hosts` que se está probando en esta ronda.
+  int _hostIdx = 0;
   int _gen = 0;
   bool _wanted = false;
 
@@ -111,9 +130,23 @@ class WebSocketTherdClient implements TherdClient {
     _config = config;
     _wanted = true;
     _attempt = 0;
+    _hostIdx = 0;
     _retryTimer?.cancel();
     _open();
   }
+
+  @override
+  void updateConfig(ConnectionConfig config) {
+    final host = _hostIdx < (_config?.hosts.length ?? 0)
+        ? _config!.hosts[_hostIdx]
+        : null;
+    _config = config;
+    // El índice sigue apuntando a la dirección en uso.
+    final i = host == null ? -1 : config.hosts.indexOf(host);
+    _hostIdx = i < 0 ? 0 : i;
+  }
+
+  bool get _lastHost => _hostIdx >= (_config?.hosts.length ?? 1) - 1;
 
   @override
   void disconnect() {
@@ -143,9 +176,12 @@ class WebSocketTherdClient implements TherdClient {
           ? const LinkStatus(LinkState.connecting)
           : LinkStatus(LinkState.reconnecting, attempt: _attempt),
     );
+    final hosts = config.hosts;
+    if (_hostIdx >= hosts.length) _hostIdx = 0;
+    final host = hosts[_hostIdx];
     final WebSocketChannel ch;
     try {
-      ch = WebSocketChannel.connect(config.webSocketUri);
+      ch = WebSocketChannel.connect(config.webSocketUriFor(host));
     } catch (e) {
       _fail(gen, e);
       return;
@@ -157,7 +193,10 @@ class WebSocketTherdClient implements TherdClient {
       onError: (Object e) => _fail(gen, e),
       onDone: () => _fail(gen, null),
     );
-    _helloTimer = Timer(_helloTimeout, () => _fail(gen, 'sin respuesta'));
+    _helloTimer = Timer(
+      _lastHost ? _helloTimeout : lanTimeout,
+      () => _fail(gen, 'sin respuesta'),
+    );
   }
 
   void _onData(int gen, Object? data) {
@@ -167,7 +206,9 @@ class WebSocketTherdClient implements TherdClient {
     if (msg is HelloMessage) {
       _helloTimer?.cancel();
       _attempt = 0;
-      _setStatus(const LinkStatus(LinkState.connected));
+      final c = _config;
+      final lan = c != null && !_lastHost && c.isLan(c.hosts[_hostIdx]);
+      _setStatus(LinkStatus(LinkState.connected, lan: lan));
       _pingTimer?.cancel();
       _pingTimer = Timer.periodic(_pingEvery, (_) => _ping(gen));
     }
@@ -198,6 +239,15 @@ class WebSocketTherdClient implements TherdClient {
       return;
     }
     _teardown();
+    // Quedan direcciones en esta ronda (la red local no respondió o se
+    // perdió): se pasa a la siguiente sin esperar.
+    if (!_lastHost) {
+      _hostIdx++;
+      _retryTimer?.cancel();
+      _open();
+      return;
+    }
+    _hostIdx = 0;
     _attempt++;
     _setStatus(
       LinkStatus(LinkState.reconnecting, attempt: _attempt, error: text),
@@ -219,11 +269,23 @@ class WebSocketTherdClient implements TherdClient {
 
   @override
   Future<String?> probe(ConnectionConfig config) async {
+    final hosts = config.hosts;
+    for (final h in hosts.take(hosts.length - 1)) {
+      if (await _probeHost(config, h, lanTimeout) == null) return null;
+    }
+    return _probeHost(config, hosts.last, const Duration(seconds: 6));
+  }
+
+  Future<String?> _probeHost(
+    ConnectionConfig config,
+    String host,
+    Duration timeout,
+  ) async {
     WebSocketChannel? ch;
     try {
-      ch = WebSocketChannel.connect(config.webSocketUri);
-      await ch.ready.timeout(const Duration(seconds: 6));
-      final first = await ch.stream.first.timeout(const Duration(seconds: 6));
+      ch = WebSocketChannel.connect(config.webSocketUriFor(host));
+      await ch.ready.timeout(timeout);
+      final first = await ch.stream.first.timeout(timeout);
       final msg = first is String ? decodeMessage(first) : null;
       if (msg is HelloMessage) return null;
       if (msg is ErrorMessage) return msg.message;

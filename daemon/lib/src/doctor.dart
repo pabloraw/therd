@@ -130,6 +130,20 @@ Future<List<CheckResult>> runDoctor({
     );
   }
 
+  // Red local (la app la prueba antes que Tailscale)
+  final lan = config.lanHosts ?? await detectLanIps();
+  out.add(
+    lan.isNotEmpty
+        ? CheckResult(CheckLevel.ok, 'Red local', lan.join(', '))
+        : CheckResult(
+            CheckLevel.warn,
+            'Sin red local',
+            config.lanHosts == null
+                ? 'No se detectó IP privada: la app solo podrá entrar por Tailscale.'
+                : 'lanHosts está vacío en la configuración: solo Tailscale.',
+          ),
+  );
+
   // Puertos
   for (final (label, h, port) in [
     ('Puerto de hooks', '127.0.0.1', config.hookPort),

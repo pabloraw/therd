@@ -24,6 +24,7 @@ class Daemon {
     required this.paths,
     required this.config,
     required this.appHost,
+    this.lanHosts = const [],
     this.hookHost = '127.0.0.1',
     this.refreshInterval = const Duration(seconds: 10),
   });
@@ -31,6 +32,9 @@ class Daemon {
   final TherdPaths paths;
   final TherdConfig config;
   final String appHost;
+
+  /// IPs de la red local donde el WebSocket escucha además de [appHost].
+  final List<String> lanHosts;
   final String hookHost;
   final Duration refreshInterval;
 
@@ -61,6 +65,7 @@ class Daemon {
     pendings: pendings,
     herdr: herdr,
     host: appHost,
+    lanHosts: lanHosts,
     port: config.appPort,
     push: push,
     seen: seen,

@@ -190,7 +190,13 @@ Future<int> _serve(
       );
     }
   }
-  final daemon = Daemon(paths: paths, config: config, appHost: host);
+  final lan = await _lanHosts(config, host);
+  final daemon = Daemon(
+    paths: paths,
+    config: config,
+    appHost: host,
+    lanHosts: lan,
+  );
   try {
     await daemon.start();
   } on SocketException catch (e) {
@@ -204,6 +210,9 @@ Future<int> _serve(
   Log.info('therd en marcha');
   Log.info('  hooks:     http://127.0.0.1:${daemon.hookServer.port}/hook');
   Log.info('  app (ws):  ws://$host:${daemon.appServer.port}/');
+  for (final h in daemon.appServer.lanBound) {
+    Log.info('  red local: ws://$h:${daemon.appServer.port}/');
+  }
   Log.info('  sesiones:  ${daemon.store.sessions.length}');
   for (final s in daemon.store.sessions) {
     Log.info(
@@ -325,11 +334,27 @@ Future<int> _pair(
     );
     return 1;
   }
-  final url = pairingUrl(host, config.appPort, config.token);
+  final url = pairingUrl(
+    host,
+    config.appPort,
+    config.token,
+    lan: await _lanHosts(config, host),
+  );
   sink.writeln('Escanea este código con la app de therd:\n');
   sink.write(renderQr(url, color: cmd['no-color'] != true));
   sink.writeln('\nO escribe la URL a mano:\n  $url');
   return 0;
+}
+
+/// IPs de la red local para el WebSocket: las de la config o las detectadas,
+/// sin repetir [host]. Escuchando en todas (0.0.0.0) no hacen falta.
+Future<List<String>> _lanHosts(TherdConfig config, String host) async {
+  if (host == '0.0.0.0') return const [];
+  final ips = config.lanHosts ?? await detectLanIps();
+  return [
+    for (final ip in ips.toSet())
+      if (ip != host) ip,
+  ];
 }
 
 Future<int> _notifyTest(TherdConfig config, StringSink sink) async {

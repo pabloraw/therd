@@ -100,6 +100,28 @@ void main() {
   Future<Conn> connect({String query = '?token=$token'}) async =>
       Conn(await WebSocket.connect('ws://127.0.0.1:${app.port}/$query'));
 
+  test('escucha también en la red local y lo anuncia en el hello', () async {
+    // El de setUp ocupa 127.0.0.1; este usa 127.0.0.1 como Tailscale y
+    // 127.0.0.2 como red local, con una IP inexistente que no debe tumbarlo.
+    final lan = AppServer(
+      token: token,
+      store: store,
+      pendings: pendings,
+      herdr: herdr,
+      port: 0,
+      lanHosts: const ['127.0.0.2', '203.0.113.9'],
+    );
+    await lan.start();
+    addTearDown(lan.stop);
+    expect(lan.lanBound, ['127.0.0.2']);
+    final c = Conn(
+      await WebSocket.connect('ws://127.0.0.2:${lan.port}/?token=$token'),
+    );
+    final hello = await c.next<HelloMessage>();
+    expect(hello.lanHosts, ['127.0.0.2']);
+    await c.ws.close();
+  });
+
   test('auth por query: primer mensaje es hello con las sesiones', () async {
     final c = await connect();
     final hello = await c.next<HelloMessage>();

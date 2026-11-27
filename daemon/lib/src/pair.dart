@@ -1,8 +1,15 @@
 import 'package:qr/qr.dart';
 
 /// URL de emparejamiento que lee la app.
-String pairingUrl(String host, int port, String token) =>
-    'therd://$host:$port?token=$token';
+/// [lan] son las IPs de la red local, que la app prueba antes que [host].
+String pairingUrl(
+  String host,
+  int port,
+  String token, {
+  List<String> lan = const [],
+}) =>
+    'therd://$host:$port?token=$token'
+    '${lan.isEmpty ? '' : '&lan=${lan.join(',')}'}';
 
 /// Dibuja un QR en ASCII (medios bloques, negro sobre blanco con ANSI).
 String renderQr(String data, {bool color = true}) {

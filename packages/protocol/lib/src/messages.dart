@@ -56,10 +56,15 @@ final class HelloMessage extends ServerMessage {
     this.version = protocolVersion,
     this.sessions = const [],
     this.workspaces = const [],
+    this.lanHosts = const [],
   });
   final int version;
   final List<SessionInfo> sessions;
   final List<WorkspaceInfo> workspaces;
+
+  /// IPs de la red local donde también escucha el daemon. La app las prueba
+  /// antes que la de Tailscale para poder apagarlo en casa.
+  final List<String> lanHosts;
   @override
   String get type => 'hello';
   @override
@@ -67,6 +72,7 @@ final class HelloMessage extends ServerMessage {
     'version': version,
     'sessions': [for (final s in sessions) s.toJson()],
     'workspaces': [for (final w in workspaces) w.toJson()],
+    if (lanHosts.isNotEmpty) 'lanHosts': lanHosts,
   };
 }
 
@@ -517,6 +523,11 @@ Message? _decode(Map<String, dynamic> j) {
         version: (j['version'] as num?)?.toInt() ?? legacyProtocolVersion,
         sessions: asList(j['sessions'], SessionInfo.fromJson),
         workspaces: asList(j['workspaces'], WorkspaceInfo.fromJson),
+        lanHosts: [
+          if (j['lanHosts'] case final List<dynamic> l)
+            for (final h in l)
+              if (h is String && h.isNotEmpty) h,
+        ],
       );
     case 'sessions':
       return SessionsMessage(

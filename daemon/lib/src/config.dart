@@ -97,9 +97,14 @@ class TherdConfig {
     this.hookPort = 24600,
     this.appPort = 24601,
     this.bindHost,
+    this.lanHosts,
     this.pendingTimeoutSeconds = 120,
     this.ntfy,
   });
+
+  /// IPs de la red local donde el WebSocket escucha además de [bindHost].
+  /// null = autodetectar; vacío = solo Tailscale.
+  List<String>? lanHosts;
 
   /// Notificaciones push por ntfy; null = desactivadas.
   NtfyConfig? ntfy;
@@ -119,6 +124,9 @@ class TherdConfig {
     hookPort: (j['hookPort'] as num?)?.toInt() ?? 24600,
     appPort: (j['appPort'] as num?)?.toInt() ?? 24601,
     bindHost: j['bindHost'] as String?,
+    lanHosts: j['lanHosts'] is List
+        ? [for (final h in j['lanHosts'] as List) '$h']
+        : null,
     pendingTimeoutSeconds: (j['pendingTimeoutSeconds'] as num?)?.toInt() ?? 120,
     ntfy: NtfyConfig.fromJson(j['ntfy']),
   );
@@ -128,6 +136,7 @@ class TherdConfig {
     'hookPort': hookPort,
     'appPort': appPort,
     'bindHost': bindHost,
+    if (lanHosts != null) 'lanHosts': lanHosts,
     'pendingTimeoutSeconds': pendingTimeoutSeconds,
     if (ntfy != null) 'ntfy': ntfy!.toJson(),
   };
@@ -222,6 +231,35 @@ bool isTailscaleAddress(String ip) {
   final a = int.tryParse(parts[0]);
   final b = int.tryParse(parts[1]);
   return a == 100 && b != null && b >= 64 && b <= 127;
+}
+
+/// ¿Es una IPv4 privada de red local (10/8, 172.16/12, 192.168/16)?
+bool isPrivateLanAddress(String ip) {
+  final p = ip.split('.').map(int.tryParse).toList();
+  if (p.length != 4 || p.any((n) => n == null)) return false;
+  final (a, b) = (p[0]!, p[1]!);
+  return a == 10 || (a == 172 && b >= 16 && b <= 31) || (a == 192 && b == 168);
+}
+
+/// Interfaces que no son la red de casa: contenedores, VMs, VPNs.
+final _virtualIface = RegExp(
+  r'^(lo|docker|br-|veth|virbr|vmnet|vboxnet|tailscale|tun|tap|wg|zt|podman|cni|flannel|lxc|lxd)',
+);
+
+/// IPv4 privadas de las interfaces físicas (Ethernet y Wi-Fi).
+Future<List<String>> detectLanIps() async {
+  try {
+    return [
+      for (final i in await NetworkInterface.list(
+        type: InternetAddressType.IPv4,
+      ))
+        if (!_virtualIface.hasMatch(i.name))
+          for (final a in i.addresses)
+            if (isPrivateLanAddress(a.address)) a.address,
+    ];
+  } catch (_) {
+    return const [];
+  }
 }
 
 /// Detecta la IPv4 de Tailscale con `tailscale ip -4` o por interfaces.

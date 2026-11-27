@@ -29,6 +29,7 @@ class AppServer {
     required this.pendings,
     required this.herdr,
     this.host = '127.0.0.1',
+    this.lanHosts = const [],
     this.port = 24601,
     this.authTimeout = const Duration(seconds: 10),
     this.interruptDelay = const Duration(milliseconds: 300),
@@ -66,11 +67,18 @@ class AppServer {
   final PendingManager pendings;
   final HerdrClient herdr;
   final String host;
+
+  /// IPs de la red local donde se escucha además de [host] (mismo puerto).
+  final List<String> lanHosts;
   int port;
   final Duration authTimeout;
   final Duration interruptDelay;
 
   HttpServer? _server;
+  final List<HttpServer> _lanServers = [];
+
+  /// Las de [lanHosts] que se pudieron abrir; se anuncian en el hello.
+  List<String> get lanBound => [for (final s in _lanServers) s.address.address];
   final Set<_Client> _clients = {};
   final List<StreamSubscription<Object?>> _subs = [];
 
@@ -82,6 +90,20 @@ class AppServer {
     _server = s;
     port = s.port;
     s.listen(_onRequest);
+    for (final h in lanHosts) {
+      if (h == host) continue;
+      try {
+        final l = await HttpServer.bind(h, port);
+        l.listen(_onRequest);
+        _lanServers.add(l);
+      } on SocketException catch (e) {
+        // Una IP local que ya no existe no impide arrancar por Tailscale.
+        Log.warn(
+          'No se pudo escuchar en $h:$port '
+          '(${e.osError?.message ?? e.message})',
+        );
+      }
+    }
     _subs.add(store.events.listen(_onStoreEvent));
     _subs.add(pendings.events.listen(_onPendingEvent));
   }
@@ -98,6 +120,10 @@ class AppServer {
     _clients.clear();
     await _server?.close(force: true);
     _server = null;
+    for (final l in _lanServers) {
+      await l.close(force: true);
+    }
+    _lanServers.clear();
   }
 
   // ---------------------------------------------------------- conexiones
@@ -217,6 +243,7 @@ class AppServer {
         version: protocolVersion,
         sessions: store.sessions,
         workspaces: store.workspaces,
+        lanHosts: lanBound,
       ),
     );
   }

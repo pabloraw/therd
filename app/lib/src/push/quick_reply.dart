@@ -68,10 +68,58 @@ Future<String?> sendQuickReply(
   String requestId, {
   Duration timeout = const Duration(seconds: 10),
 }) async {
+  // Primero la red local con poca espera; si no conecta, Tailscale. No se
+  // abre una conexión de sondeo aparte: al cerrarse, el daemon soltaría los
+  // pendientes por creer que la app se ha ido.
+  final hosts = config.hosts;
+  for (final h in hosts.take(hosts.length - 1)) {
+    try {
+      return await _quickReply(
+        config,
+        h,
+        message,
+        requestId,
+        timeout,
+        readyTimeout: WebSocketTherdClient.lanTimeout,
+      );
+    } on _Unreachable {
+      continue;
+    }
+  }
+  try {
+    return await _quickReply(config, hosts.last, message, requestId, timeout);
+  } on _Unreachable catch (e) {
+    return e.reason;
+  }
+}
+
+/// La dirección no aceptó la conexión; se puede probar otra.
+class _Unreachable implements Exception {
+  _Unreachable(this.reason);
+  final String reason;
+}
+
+Future<String?> _quickReply(
+  ConnectionConfig config,
+  String host,
+  ClientMessage message,
+  String requestId,
+  Duration timeout, {
+  Duration? readyTimeout,
+}) async {
   WebSocketChannel? ch;
   try {
-    ch = WebSocketChannel.connect(config.webSocketUri);
-    await ch.ready.timeout(timeout);
+    ch = WebSocketChannel.connect(config.webSocketUriFor(host));
+    try {
+      await ch.ready.timeout(readyTimeout ?? timeout);
+    } on TimeoutException {
+      throw _Unreachable('Sin respuesta de ${config.labelFor(host)}');
+    } catch (e) {
+      final text = describeError(e, config);
+      // Un token rechazado no se arregla con otra dirección.
+      if (text.startsWith('Token')) return text;
+      throw _Unreachable(text);
+    }
     final done = Completer<String?>();
     final sub = ch.stream.listen(
       (data) {
@@ -107,7 +155,9 @@ Future<String?> sendQuickReply(
       await sub.cancel();
     }
   } on TimeoutException {
-    return 'Sin respuesta de ${config.label}';
+    return 'Sin respuesta de ${config.labelFor(host)}';
+  } on _Unreachable {
+    rethrow;
   } catch (e) {
     return describeError(e, config);
   } finally {

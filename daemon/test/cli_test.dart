@@ -55,6 +55,35 @@ void main() {
   });
 
   test(
+    'pair: las IPs de lanHosts van en la URL para probarlas primero',
+    () async {
+      final paths = TherdPaths(home: tmp.path, configDir: '${tmp.path}/cfg');
+      TherdConfig.load(paths)
+        ..lanHosts = ['192.168.1.5', '100.1.2.3']
+        ..save(paths);
+      final out = StringBuffer();
+      await runCli([
+        'pair',
+        ...base,
+        '--host',
+        '100.1.2.3',
+        '--no-color',
+      ], out: out);
+      expect(out.toString(), contains('&lan=192.168.1.5\n'));
+      expect(TherdConfig.load(paths).lanHosts, ['192.168.1.5', '100.1.2.3']);
+    },
+  );
+
+  test('IPs privadas de red local', () {
+    for (final ip in ['192.168.1.5', '10.0.0.2', '172.16.0.1', '172.31.9.9']) {
+      expect(isPrivateLanAddress(ip), isTrue, reason: ip);
+    }
+    for (final ip in ['100.66.1.1', '172.32.0.1', '8.8.8.8', 'basura']) {
+      expect(isPrivateLanAddress(ip), isFalse, reason: ip);
+    }
+  });
+
+  test(
     'install --dry-run no escribe ni crea config; install real y uninstall',
     () async {
       final out = StringBuffer();

@@ -32,11 +32,18 @@ class _ConnectionScreenState extends ConsumerState<ConnectionScreen> {
   /// Datos a mano: abiertos en ajustes, o si ya hay datos o errores.
   late bool _manualOpen;
 
+  /// IPs de la red local (del QR o de la conexión guardada), sin campo en el
+  /// formulario. Solo valen mientras el host sea el mismo del que vinieron.
+  List<String> _lan = const [];
+  String _lanOf = '';
+
   @override
   void initState() {
     super.initState();
     final c = ref.read(therdProvider).config;
     _manualOpen = !widget.firstRun || c != null;
+    _lan = c?.lanHosts ?? const [];
+    _lanOf = c?.host ?? '';
     _host = TextEditingController(text: c?.host ?? '');
     _port = TextEditingController(
       text: '${c?.port ?? ConnectionConfig.defaultPort}',
@@ -57,10 +64,12 @@ class _ConnectionScreenState extends ConsumerState<ConnectionScreen> {
       setState(() => _manualOpen = true);
       return null;
     }
+    final host = _host.text.trim();
     return ConnectionConfig(
-      host: _host.text.trim(),
+      host: host,
       port: int.parse(_port.text.trim()),
       token: _token.text.trim(),
+      lanHosts: host == _lanOf ? _lan : const [],
     );
   }
 
@@ -77,6 +86,8 @@ class _ConnectionScreenState extends ConsumerState<ConnectionScreen> {
         _resultOk = false;
       } else {
         _host.text = c.host;
+        _lan = c.lanHosts;
+        _lanOf = c.host;
         _port.text = '${c.port}';
         _token.text = c.token;
         _result = 'QR leído, ya puedes probar o guardar';
