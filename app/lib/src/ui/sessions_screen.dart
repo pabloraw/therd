@@ -291,7 +291,7 @@ class _Header extends ConsumerWidget {
           ),
           IconButton(
             tooltip: 'Ordenadores',
-            icon: const Icon(Icons.tune, size: 20),
+            icon: const Icon(Icons.computer_outlined, size: 22),
             onPressed: () => Navigator.of(
               context,
             ).push(MaterialPageRoute(builder: (_) => const ComputersScreen())),

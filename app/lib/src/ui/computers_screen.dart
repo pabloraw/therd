@@ -190,7 +190,7 @@ Future<void> showComputerSwitcher(BuildContext context, WidgetRef ref) =>
               const Divider(height: 1),
               ListTile(
                 contentPadding: const EdgeInsets.symmetric(horizontal: 20),
-                leading: const SizedBox(width: 24, child: Icon(Icons.tune)),
+                leading: const SizedBox(width: 24, child: Icon(Icons.computer_outlined)),
                 title: const Text('Gestionar ordenadores'),
                 onTap: () {
                   Navigator.of(sheet).pop();
