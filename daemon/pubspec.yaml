@@ -1,6 +1,6 @@
 name: therd_daemon
 description: Daemon de therd, une hooks de Claude Code, transcripts y la API de herdr y los expone por WebSocket.
-version: 0.3.0
+version: 0.4.0
 publish_to: none
 
 environment:
